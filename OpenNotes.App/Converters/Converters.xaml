@@ -1,0 +1,30 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:conv="clr-namespace:OpenNotes.Converters">
+
+    <!-- Shared converters, available globally to all Views and DataTemplates -->
+    <conv:CountToVisibilityConverter x:Key="CountToVisibilityConverter" />
+    <conv:ZeroCountToVisibilityConverter x:Key="ZeroCountToVisibilityConverter" />
+    <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+    <conv:BoolToVisibilityConverter x:Key="InvertBoolToVisibilityConverter" Invert="True" />
+    <conv:StringToColorConverter x:Key="StringToColorConverter" />
+    <conv:StringToBrushConverter x:Key="StringToBrushConverter" />
+    <conv:StatusToBrushConverter x:Key="StatusToBrushConverter" />
+    <conv:PriorityToBrushConverter x:Key="PriorityToBrushConverter" />
+    <conv:BoolToCheckConverter x:Key="BoolToCheckConverter" />
+    <conv:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
+    <conv:StatusToCompletedConverter x:Key="StatusToCompletedConverter" />
+    <conv:BlockTypeNameConverter x:Key="BlockTypeNameConverter" />
+    <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter" />
+    <conv:EnumToBoolConverter x:Key="EnumToBoolConverter" />
+    <conv:BlockPreviewConverter x:Key="BlockPreviewConverter" />
+    <conv:SvgStringToImageSourceConverter x:Key="SvgStringToImageSourceConverter" />
+    <conv:PathToImageSourceConverter x:Key="PathToImageSourceConverter" />
+    <conv:LatexNormalizeConverter x:Key="LatexNormalizeConverter" />
+
+    <!-- Short aliases used by block views -->
+    <conv:NullToVisibilityConverter x:Key="NullToVis" />
+    <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
+    <conv:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True" />
+
+</ResourceDictionary>

@@ -1,0 +1,51 @@
+<UserControl x:Class="OpenNotes.Views.Blocks.LatexBlockView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wpfmath="clr-namespace:WpfMath.Controls;assembly=WpfMath"
+             xmlns:conv="clr-namespace:OpenNotes.Converters">
+
+    <UserControl.Resources>
+        <conv:NullToVisibilityConverter x:Key="NullToVis" />
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Formula input -->
+        <TextBox Grid.Row="0"
+                 Text="{Binding Formula, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 Style="{StaticResource ModernTextBox}"
+                 FontFamily="Consolas,Courier New"
+                 FontSize="{DynamicResource FontSizeSM}"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 VerticalScrollBarVisibility="Auto"
+                 MaxHeight="220"
+                 SpellCheck.IsEnabled="False"
+                 Tag="LaTeX formula e.g. E = mc^2 (multi-line and % comments supported)" />
+
+        <!-- Error message -->
+        <TextBlock Grid.Row="1"
+                   Text="{Binding ErrorMessage}"
+                   Foreground="{DynamicResource PriorityHighBrush}"
+                   FontSize="{DynamicResource FontSizeXS}"
+                   Margin="0,4"
+                   Visibility="{Binding ErrorMessage, Converter={StaticResource NullToVis}}" />
+
+        <!-- Rendered preview -->
+        <Border Grid.Row="2"
+                Padding="12,8"
+                Background="{DynamicResource SurfaceBrush}"
+                CornerRadius="{DynamicResource RadiusSM}"
+                Margin="0,6,0,0">
+            <wpfmath:FormulaControl Formula="{Binding RenderedFormula}"
+                                    Foreground="{DynamicResource TextPrimaryBrush}"
+                                    Scale="20"
+                                    HorizontalAlignment="Center" />
+        </Border>
+    </Grid>
+</UserControl>

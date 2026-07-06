@@ -19,6 +19,10 @@ project_summary.md
 *.cachefile
 *.VC.db
 *.VC.VC.opendb
+Debug/
+Release/
+bin/
+obj/
 
 ## NuGet Packages and Dependencies
 .packages/

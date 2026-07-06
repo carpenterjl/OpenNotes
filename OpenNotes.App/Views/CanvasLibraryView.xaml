@@ -1,0 +1,80 @@
+<UserControl x:Class="OpenNotes.Views.CanvasLibraryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{DynamicResource BackgroundBrush}">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,24">
+
+            <!-- Header -->
+            <DockPanel Margin="0,0,0,24" LastChildFill="False">
+                <StackPanel DockPanel.Dock="Left">
+                    <TextBlock Text="Standalone canvases in this workspace"
+                               FontSize="{DynamicResource FontSizeSM}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Margin="0,0,0,4" />
+                    <TextBlock Text="🎨 Canvases"
+                               FontSize="{DynamicResource FontSizeXXL}"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                </StackPanel>
+                <Button DockPanel.Dock="Right" VerticalAlignment="Center"
+                        Content="✚ New Canvas"
+                        Style="{StaticResource PrimaryButton}"
+                        Command="{Binding CreateCanvasCommand}"
+                        Padding="14,6" />
+            </DockPanel>
+
+            <!-- Empty state -->
+            <TextBlock Text="No standalone canvases yet. Create one, or open a task's canvas from its editor."
+                       FontSize="{DynamicResource FontSizeSM}"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Visibility="{Binding Canvases.Count, Converter={StaticResource ZeroCountToVisibilityConverter}}" />
+
+            <!-- Canvas cards -->
+            <ItemsControl ItemsSource="{Binding Canvases}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource CardBorder}" Width="240" Margin="0,0,16,16"
+                                Cursor="Hand"
+                                MouseLeftButtonUp="CanvasCard_Click"
+                                Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                ToolTip="Open this canvas">
+                            <Border.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Open"
+                                              Command="{Binding PlacementTarget.Tag.OpenCanvasCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding}" />
+                                    <Separator />
+                                    <MenuItem Header="Delete"
+                                              Command="{Binding PlacementTarget.Tag.DeleteCanvasCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding}" />
+                                </ContextMenu>
+                            </Border.ContextMenu>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}"
+                                           FontSize="{DynamicResource FontSizeLG}"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="{Binding Pages.Count, StringFormat='{}{0} page(s)'}"
+                                           FontSize="{DynamicResource FontSizeSM}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,6,0,0" />
+                                <TextBlock Text="{Binding ModifiedAt, StringFormat='Modified {0:g}'}"
+                                           FontSize="{DynamicResource FontSizeXS}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,2,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

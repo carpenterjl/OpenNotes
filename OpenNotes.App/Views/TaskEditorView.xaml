@@ -1,0 +1,375 @@
+<UserControl x:Class="OpenNotes.Views.TaskEditorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:OpenNotes.Converters"
+             xmlns:tmpl="clr-namespace:OpenNotes.Templates"
+             xmlns:models="clr-namespace:OpenNotes.Models"
+             xmlns:vm="clr-namespace:OpenNotes.ViewModels.Blocks"
+             xmlns:blockViews="clr-namespace:OpenNotes.Views.Blocks"
+             Background="{DynamicResource BackgroundBrush}"
+             Unloaded="View_Unloaded">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
+        <conv:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True" />
+        <conv:NullToVisibilityConverter x:Key="NullToVis" />
+        <conv:StatusToBrushConverter x:Key="StatusToBrush" />
+        <conv:PriorityToBrushConverter x:Key="PriorityToBrush" />
+        <conv:ZeroCountToVisibilityConverter x:Key="CountToVis" />
+        <conv:BlockTypeNameConverter x:Key="BlockTypeNameConverter" />
+
+        <!-- Block DataTemplates -->
+        <DataTemplate DataType="{x:Type vm:TextBlockViewModel}">
+            <blockViews:TextBlockView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:MarkdownBlockViewModel}">
+            <blockViews:MarkdownBlockView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:LatexBlockViewModel}">
+            <blockViews:LatexBlockView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CodeBlockViewModel}">
+            <blockViews:CodeBlockView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:MermaidBlockViewModel}">
+            <blockViews:MermaidBlockView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ImageBlockViewModel}">
+            <blockViews:ImageBlockView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ChecklistBlockViewModel}">
+            <blockViews:ChecklistBlockView />
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />  <!-- Header / title -->
+            <RowDefinition Height="Auto" />  <!-- Meta row -->
+            <RowDefinition Height="Auto" />  <!-- Tags row -->
+            <RowDefinition Height="*" />     <!-- Content blocks -->
+            <RowDefinition Height="Auto" />  <!-- Action bar -->
+        </Grid.RowDefinitions>
+
+        <!-- ===== Header ===== -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="24,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Title (editable inline) -->
+                <TextBox Grid.Column="0"
+                         Text="{Binding TaskTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         FontSize="22"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Center"
+                         Tag="Task title..." />
+
+                <!-- Dirty indicator + Save -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                    <TextBlock Text="● Unsaved"
+                               FontSize="{DynamicResource FontSizeXS}"
+                               Foreground="{DynamicResource AccentBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,12,0"
+                               Visibility="{Binding IsDirty, Converter={StaticResource BoolToVis}}" />
+                    <Button Content="🎨 Canvas"
+                            Style="{StaticResource SecondaryButton}"
+                            Command="{Binding OpenCanvasCommand}"
+                            ToolTip="Open the free-form canvas for this task"
+                            Padding="12,6"
+                            Margin="0,0,8,0" />
+                    <Button Content="Save  Ctrl+S"
+                            Style="{StaticResource PrimaryButton}"
+                            Command="{Binding SaveCommand}"
+                            Padding="12,6" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ===== Meta row ===== -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource SurfaceBrush}"
+                Padding="24,10"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1">
+            <WrapPanel Orientation="Horizontal">
+                <!-- Status -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,24,0">
+                    <TextBlock Text="Status"
+                               FontSize="{DynamicResource FontSizeXS}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <ComboBox SelectedValue="{Binding Status, Mode=TwoWay}"
+                              SelectedValuePath="Tag"
+                              FontSize="{DynamicResource FontSizeSM}"
+                              MinWidth="120">
+                        <ComboBoxItem Content="Not Started" Tag="{x:Static models:TaskStatus.NotStarted}" />
+                        <ComboBoxItem Content="In Progress" Tag="{x:Static models:TaskStatus.InProgress}" />
+                        <ComboBoxItem Content="Blocked" Tag="{x:Static models:TaskStatus.Blocked}" />
+                        <ComboBoxItem Content="Waiting" Tag="{x:Static models:TaskStatus.Waiting}" />
+                        <ComboBoxItem Content="Review" Tag="{x:Static models:TaskStatus.Review}" />
+                        <ComboBoxItem Content="Completed" Tag="{x:Static models:TaskStatus.Completed}" />
+                        <ComboBoxItem Content="Cancelled" Tag="{x:Static models:TaskStatus.Cancelled}" />
+                        <ComboBoxItem Content="Deferred" Tag="{x:Static models:TaskStatus.Deferred}" />
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- Priority -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,24,0">
+                    <TextBlock Text="Priority"
+                               FontSize="{DynamicResource FontSizeXS}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <ComboBox SelectedValue="{Binding Priority, Mode=TwoWay}"
+                              SelectedValuePath="Tag"
+                              FontSize="{DynamicResource FontSizeSM}"
+                              MinWidth="100">
+                        <ComboBoxItem Content="None" Tag="{x:Static models:TaskPriority.None}" />
+                        <ComboBoxItem Content="Low" Tag="{x:Static models:TaskPriority.Low}" />
+                        <ComboBoxItem Content="Medium" Tag="{x:Static models:TaskPriority.Medium}" />
+                        <ComboBoxItem Content="High" Tag="{x:Static models:TaskPriority.High}" />
+                        <ComboBoxItem Content="Critical" Tag="{x:Static models:TaskPriority.Critical}" />
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- Due Date -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,24,0">
+                    <TextBlock Text="Due"
+                               FontSize="{DynamicResource FontSizeXS}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <DatePicker SelectedDate="{Binding DueDate, Mode=TwoWay}"
+                                FontSize="{DynamicResource FontSizeSM}"
+                                MinWidth="140" />
+                </StackPanel>
+
+                <!-- Completion -->
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Done"
+                               FontSize="{DynamicResource FontSizeXS}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <Slider Minimum="0" Maximum="100"
+                            Value="{Binding CompletionPercentage, Mode=TwoWay}"
+                            Width="120"
+                            TickFrequency="5"
+                            IsSnapToTickEnabled="True"
+                            VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding CompletionPercentage, StringFormat='{}{0}%'}"
+                               FontSize="{DynamicResource FontSizeXS}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="6,0,0,0" />
+                </StackPanel>
+            </WrapPanel>
+        </Border>
+
+        <!-- ===== Tags ===== -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource SurfaceBrush}"
+                Padding="24,8"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1">
+            <WrapPanel Orientation="Horizontal">
+                <!-- Existing tags -->
+                <ItemsControl ItemsSource="{Binding Tags}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{DynamicResource AccentBrush}"
+                                    CornerRadius="{DynamicResource RadiusSM}"
+                                    Padding="8,3"
+                                    Margin="0,0,6,4">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding}"
+                                               Foreground="White"
+                                               FontSize="{DynamicResource FontSizeXS}" />
+                                    <Button Content="✕"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Foreground="White"
+                                            FontSize="9"
+                                            Padding="3,0,0,0"
+                                            Cursor="Hand"
+                                            Command="{Binding DataContext.RemoveTagCommand,
+                                                      RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Tag input -->
+                <StackPanel Orientation="Horizontal">
+                    <TextBox Text="{Binding TagInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource ModernTextBox}"
+                             Width="120"
+                             Tag="Add tag..."
+                             FontSize="{DynamicResource FontSizeXS}">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Return" Command="{Binding AddTagCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
+                    <Button Content="+"
+                            Style="{StaticResource IconButton}"
+                            Command="{Binding AddTagCommand}"
+                            Margin="4,0,0,0" />
+                </StackPanel>
+            </WrapPanel>
+        </Border>
+
+        <!-- ===== Content Blocks ===== -->
+        <ScrollViewer Grid.Row="3"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Block list -->
+                <ItemsControl Grid.Row="0"
+                              ItemsSource="{Binding BlockViewModels}"
+                              Margin="24,16">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,8"
+                                    Background="{DynamicResource SurfaceBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="{DynamicResource RadiusMD}"
+                                    Padding="12">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Block toolbar -->
+                                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                            <Button Content="↑"
+                                                    Style="{StaticResource IconButton}"
+                                                    FontSize="12"
+                                                    Command="{Binding MoveUpCommand}"
+                                                    ToolTip="Move up" />
+                                            <Button Content="↓"
+                                                    Style="{StaticResource IconButton}"
+                                                    FontSize="12"
+                                                    Command="{Binding MoveDownCommand}"
+                                                    ToolTip="Move down" />
+                                            <Button Content="✕"
+                                                    Style="{StaticResource IconButton}"
+                                                    FontSize="10"
+                                                    Foreground="{DynamicResource PriorityHighBrush}"
+                                                    Command="{Binding DeleteCommand}"
+                                                    ToolTip="Remove block" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Block, Converter={StaticResource BlockTypeNameConverter}}"
+                                                   FontSize="{DynamicResource FontSizeXS}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <!-- Block content (type-based DataTemplate) + resize grip -->
+                                    <Grid Grid.Row="1">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <ContentPresenter Grid.Row="0"
+                                                          Content="{Binding}"
+                                                          VerticalAlignment="Top"
+                                                          MinHeight="40"
+                                                          Height="{Binding EditorHeight}" />
+
+                                        <!-- Vertical resize handle -->
+                                        <Thumb Grid.Row="1"
+                                               Height="10"
+                                               Margin="0,4,0,0"
+                                               HorizontalAlignment="Stretch"
+                                               Cursor="SizeNS"
+                                               Tag="{Binding}"
+                                               DragDelta="BlockResize_DragDelta"
+                                               ToolTip="Drag to resize this block">
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Border Background="Transparent">
+                                                        <Border Height="4" Width="40"
+                                                                VerticalAlignment="Center"
+                                                                CornerRadius="2"
+                                                                Background="{DynamicResource BorderBrush}" />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Empty state -->
+                <Border Grid.Row="1"
+                        Margin="24,0,24,16"
+                        Padding="32"
+                        Visibility="{Binding BlockViewModels.Count, Converter={StaticResource CountToVis}}">
+                    <TextBlock Text="No content blocks yet. Use the buttons below to add content."
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               TextAlignment="Center"
+                               FontSize="{DynamicResource FontSizeSM}" />
+                </Border>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- ===== Action bar ===== -->
+        <Border Grid.Row="4"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="24,10">
+            <WrapPanel Orientation="Horizontal">
+                <TextBlock Text="Add block:"
+                           FontSize="{DynamicResource FontSizeXS}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,12,0" />
+                <Button Content="Text" Style="{StaticResource SecondaryButton}" Padding="8,4" Margin="0,0,6,0"
+                        Command="{Binding AddTextBlockCommand}" />
+                <Button Content="Markdown" Style="{StaticResource SecondaryButton}" Padding="8,4" Margin="0,0,6,0"
+                        Command="{Binding AddMarkdownBlockCommand}" />
+                <Button Content="Code" Style="{StaticResource SecondaryButton}" Padding="8,4" Margin="0,0,6,0"
+                        Command="{Binding AddCodeBlockCommand}" />
+                <Button Content="LaTeX" Style="{StaticResource SecondaryButton}" Padding="8,4" Margin="0,0,6,0"
+                        Command="{Binding AddLatexBlockCommand}" />
+                <Button Content="Mermaid" Style="{StaticResource SecondaryButton}" Padding="8,4" Margin="0,0,6,0"
+                        Command="{Binding AddMermaidBlockCommand}" />
+                <Button Content="Checklist" Style="{StaticResource SecondaryButton}" Padding="8,4" Margin="0,0,6,0"
+                        Command="{Binding AddChecklistBlockCommandCommand}" />
+            </WrapPanel>
+        </Border>
+    </Grid>
+</UserControl>

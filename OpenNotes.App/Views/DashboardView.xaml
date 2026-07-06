@@ -1,0 +1,174 @@
+<UserControl x:Class="OpenNotes.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{DynamicResource BackgroundBrush}">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,24">
+
+            <!-- Header -->
+            <StackPanel Margin="0,0,0,24">
+                <TextBlock Text="{Binding WorkspaceName, StringFormat='Workspace: {0}'}"
+                           FontSize="{DynamicResource FontSizeSM}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,0,0,4" />
+                <TextBlock Text="Dashboard"
+                           FontSize="{DynamicResource FontSizeXXL}"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+            </StackPanel>
+
+            <!-- Stat Cards Row -->
+            <UniformGrid Rows="1" Columns="4" Margin="0,0,0,32">
+
+                <Border Style="{StaticResource CardBorder}" Margin="0,0,12,0"
+                        Cursor="Hand" Tag="DueToday" MouseLeftButtonDown="StatCard_Click"
+                        ToolTip="Show tasks due today">
+                    <StackPanel>
+                        <TextBlock Text="{Binding DueTodayCount}"
+                                   FontSize="{DynamicResource FontSizeXXL}"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="Due Today"
+                                   FontSize="{DynamicResource FontSizeSM}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardBorder}" Margin="0,0,12,0"
+                        Cursor="Hand" Tag="Overdue" MouseLeftButtonDown="StatCard_Click"
+                        ToolTip="Show overdue tasks">
+                    <StackPanel>
+                        <TextBlock Text="{Binding OverdueCount}"
+                                   FontSize="{DynamicResource FontSizeXXL}"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource ErrorBrush}" />
+                        <TextBlock Text="Overdue"
+                                   FontSize="{DynamicResource FontSizeSM}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardBorder}" Margin="0,0,12,0"
+                        Cursor="Hand" Tag="Upcoming" MouseLeftButtonDown="StatCard_Click"
+                        ToolTip="Show tasks due in the next 7 days">
+                    <StackPanel>
+                        <TextBlock Text="{Binding UpcomingCount}"
+                                   FontSize="{DynamicResource FontSizeXXL}"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource WarningBrush}" />
+                        <TextBlock Text="Upcoming (7d)"
+                                   FontSize="{DynamicResource FontSizeSM}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardBorder}"
+                        Cursor="Hand" Tag="Completed" MouseLeftButtonDown="StatCard_Click"
+                        ToolTip="Show completed tasks">
+                    <StackPanel>
+                        <TextBlock Text="{Binding CompletedThisWeekCount}"
+                                   FontSize="{DynamicResource FontSizeXXL}"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource SuccessBrush}" />
+                        <TextBlock Text="Completed (7d)"
+                                   FontSize="{DynamicResource FontSizeSM}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <!-- Overdue Tasks -->
+            <StackPanel Visibility="{Binding OverdueTasks.Count, Converter={StaticResource CountToVisibilityConverter}}"
+                        Margin="0,0,0,24">
+                <TextBlock Text="⚠ Overdue"
+                           FontSize="{DynamicResource FontSizeLG}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource ErrorBrush}"
+                           Margin="0,0,0,8" />
+                <ItemsControl ItemsSource="{Binding OverdueTasks}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource CardBorder}" Margin="0,0,0,6"
+                                    BorderBrush="{DynamicResource ErrorBrush}" BorderThickness="2,0,0,0"
+                                    CornerRadius="0,8,8,0"
+                                    Cursor="Hand" Tag="{Binding}" MouseLeftButtonDown="TaskRow_Click">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding Title}"
+                                               FontSize="{DynamicResource FontSizeMD}"
+                                               Foreground="{DynamicResource TextPrimaryBrush}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding DueDate, StringFormat='Due: {0:MMM d}'}"
+                                               FontSize="{DynamicResource FontSizeXS}"
+                                               Foreground="{DynamicResource ErrorBrush}"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- Due Today -->
+            <StackPanel Visibility="{Binding DueTodayTasks.Count, Converter={StaticResource CountToVisibilityConverter}}"
+                        Margin="0,0,0,24">
+                <TextBlock Text="📅 Due Today"
+                           FontSize="{DynamicResource FontSizeLG}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           Margin="0,0,0,8" />
+                <ItemsControl ItemsSource="{Binding DueTodayTasks}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource CardBorder}" Margin="0,0,0,6"
+                                    Cursor="Hand" Tag="{Binding}" MouseLeftButtonDown="TaskRow_Click">
+                                <TextBlock Text="{Binding Title}"
+                                           FontSize="{DynamicResource FontSizeMD}"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- Recent Activity -->
+            <StackPanel Margin="0,0,0,24">
+                <TextBlock Text="🕐 Recent Activity"
+                           FontSize="{DynamicResource FontSizeLG}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           Margin="0,0,0,8" />
+                <ItemsControl ItemsSource="{Binding RecentTasks}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4"
+                                    Cursor="Hand" Tag="{Binding}" MouseLeftButtonDown="TaskRow_Click">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding Title}"
+                                               FontSize="{DynamicResource FontSizeMD}"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding ModifiedAt, StringFormat='{}{0:MMM d, HH:mm}'}"
+                                               FontSize="{DynamicResource FontSizeXS}"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

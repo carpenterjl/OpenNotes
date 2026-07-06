@@ -1,0 +1,53 @@
+<UserControl x:Class="OpenNotes.Views.Blocks.MarkdownBlockView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:md="clr-namespace:Markdig.Wpf;assembly=Markdig.Wpf"
+             xmlns:conv="clr-namespace:OpenNotes.Converters">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
+        <conv:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True" />
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Toggle bar -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4">
+            <Button Content="Edit"
+                    Style="{StaticResource SecondaryButton}"
+                    Padding="8,2"
+                    FontSize="{DynamicResource FontSizeXS}"
+                    Command="{Binding BeginEditCommand}"
+                    Visibility="{Binding IsEditing, Converter={StaticResource InvBoolToVis}}" />
+            <Button Content="Preview"
+                    Style="{StaticResource SecondaryButton}"
+                    Padding="8,2"
+                    FontSize="{DynamicResource FontSizeXS}"
+                    Command="{Binding CommitEditCommand}"
+                    Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}" />
+        </StackPanel>
+
+        <!-- Editor -->
+        <TextBox Grid.Row="1"
+                 Text="{Binding Markdown, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 Style="{StaticResource ModernTextBox}"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 MinHeight="80"
+                 FontFamily="Consolas,Courier New"
+                 FontSize="{DynamicResource FontSizeSM}"
+                 VerticalScrollBarVisibility="Auto"
+                 Tag="Markdown content..."
+                 Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}" />
+
+        <!-- Preview -->
+        <md:MarkdownViewer Grid.Row="1"
+                           Markdown="{Binding Markdown}"
+                           MinHeight="40"
+                           Visibility="{Binding IsEditing, Converter={StaticResource InvBoolToVis}}" />
+    </Grid>
+</UserControl>

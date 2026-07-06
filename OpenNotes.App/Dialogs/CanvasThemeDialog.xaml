@@ -1,0 +1,103 @@
+<Window x:Class="OpenNotes.Dialogs.CanvasThemeDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Canvas Colors" Width="440" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource SurfaceBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        WindowStyle="ToolWindow">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="16" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="10" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="10" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="14" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="18" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" TextWrapping="Wrap"
+                   Text="Custom colors for this canvas (saved with the document). Leave a field empty to use the app theme's color."
+                   FontSize="{DynamicResource FontSizeSM}"
+                   Foreground="{DynamicResource TextSecondaryBrush}" />
+
+        <!-- One row per overridable canvas key: label | hex box | live preview swatch -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="40" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Text" VerticalAlignment="Center"
+                       FontSize="{DynamicResource FontSizeSM}" />
+            <TextBox Grid.Column="1" x:Name="TextBox_Text" Style="{StaticResource ModernTextBox}"
+                     TextChanged="AnyColorBox_TextChanged" ToolTip="Hex color, e.g. #E8D44D" />
+            <Border Grid.Column="2" x:Name="Preview_Text" Width="24" Height="24" Margin="10,0,0,0"
+                    CornerRadius="4" BorderThickness="1"
+                    BorderBrush="{DynamicResource BorderBrush}" HorizontalAlignment="Left"
+                    Cursor="Hand" ToolTip="Click to pick a color"
+                    MouseLeftButtonUp="Swatch_Click" Tag="Text" />
+        </Grid>
+
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="40" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Accent &amp; lines" VerticalAlignment="Center"
+                       FontSize="{DynamicResource FontSizeSM}" />
+            <TextBox Grid.Column="1" x:Name="TextBox_Accent" Style="{StaticResource ModernTextBox}"
+                     TextChanged="AnyColorBox_TextChanged" ToolTip="Hex color, e.g. #7B9CDF" />
+            <Border Grid.Column="2" x:Name="Preview_Accent" Width="24" Height="24" Margin="10,0,0,0"
+                    CornerRadius="4" BorderThickness="1"
+                    BorderBrush="{DynamicResource BorderBrush}" HorizontalAlignment="Left"
+                    Cursor="Hand" ToolTip="Click to pick a color"
+                    MouseLeftButtonUp="Swatch_Click" Tag="Accent" />
+        </Grid>
+
+        <Grid Grid.Row="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="40" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Card background" VerticalAlignment="Center"
+                       FontSize="{DynamicResource FontSizeSM}" />
+            <TextBox Grid.Column="1" x:Name="TextBox_Surface" Style="{StaticResource ModernTextBox}"
+                     TextChanged="AnyColorBox_TextChanged" ToolTip="Hex color, e.g. #2A2A3E" />
+            <Border Grid.Column="2" x:Name="Preview_Surface" Width="24" Height="24" Margin="10,0,0,0"
+                    CornerRadius="4" BorderThickness="1"
+                    BorderBrush="{DynamicResource BorderBrush}" HorizontalAlignment="Left"
+                    Cursor="Hand" ToolTip="Click to pick a color"
+                    MouseLeftButtonUp="Swatch_Click" Tag="Surface" />
+        </Grid>
+
+        <TextBlock Grid.Row="8" TextWrapping="Wrap"
+                   Text="Mermaid diagrams are re-rendered with these colors when you press OK."
+                   FontSize="{DynamicResource FontSizeXS}"
+                   Foreground="{DynamicResource TextSecondaryBrush}" />
+
+        <DockPanel Grid.Row="10" LastChildFill="False">
+            <Button DockPanel.Dock="Left" Content="Use theme defaults" Padding="10,4"
+                    Style="{DynamicResource SecondaryButton}"
+                    ToolTip="Clear all custom colors for this canvas"
+                    Click="Defaults_Click" />
+            <Button DockPanel.Dock="Right" Content="OK" Width="72"
+                    Style="{DynamicResource PrimaryButton}"
+                    IsDefault="True"
+                    Click="OK_Click" />
+            <Button DockPanel.Dock="Right" Content="Cancel" Width="72" Margin="0,0,8,0"
+                    Style="{DynamicResource SecondaryButton}"
+                    IsCancel="True"
+                    Click="Cancel_Click" />
+        </DockPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,132 @@
+<UserControl x:Class="OpenNotes.Views.SearchView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:OpenNotes.Converters"
+             Background="{DynamicResource BackgroundBrush}">
+
+    <UserControl.Resources>
+        <conv:StatusToBrushConverter x:Key="StatusToBrush" />
+        <conv:PriorityToBrushConverter x:Key="PriorityToBrush" />
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
+        <conv:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True" />
+        <conv:NullToVisibilityConverter x:Key="NullToVis" />
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Search header -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="24,16">
+            <StackPanel>
+                <TextBlock Text="Search"
+                           FontSize="{DynamicResource FontSizeXL}"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           Margin="0,0,0,12" />
+
+                <TextBox x:Name="SearchBox"
+                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource ModernTextBox}"
+                         FontSize="{DynamicResource FontSizeLG}"
+                         Tag="Search tasks, tags, content..."
+                         Padding="12,10" />
+            </StackPanel>
+        </Border>
+
+        <!-- Results -->
+        <Grid Grid.Row="1">
+            <!-- Loading -->
+            <TextBlock Text="Searching..."
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontSize="{DynamicResource FontSizeMD}"
+                       Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
+
+            <!-- No results -->
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding HasResults, Converter={StaticResource InvBoolToVis}}">
+                <TextBlock Text="🔍"
+                           FontSize="48"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,12" />
+                <TextBlock Text="No results found"
+                           FontSize="{DynamicResource FontSizeMD}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+
+            <!-- Results list -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          Margin="24,16"
+                          Visibility="{Binding HasResults, Converter={StaticResource BoolToVis}}">
+                <ItemsControl ItemsSource="{Binding Results}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,8"
+                                    Background="{DynamicResource SurfaceBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="{DynamicResource RadiusMD}"
+                                    Padding="16,12"
+                                    Cursor="Hand"
+                                    MouseLeftButtonUp="Result_Click"
+                                    Tag="{Binding}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Priority indicator -->
+                                    <Rectangle Grid.Column="0"
+                                               Width="4" Height="36"
+                                               RadiusX="2" RadiusY="2"
+                                               Margin="0,0,12,0"
+                                               Fill="{Binding Priority, Converter={StaticResource PriorityToBrush}}" />
+
+                                    <!-- Content -->
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontSize="{DynamicResource FontSizeMD}"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                                        <TextBlock Text="{Binding Snippet}"
+                                                   FontSize="{DynamicResource FontSizeXS}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                                   Margin="0,3,0,0"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding WorkspaceName}"
+                                                   FontSize="{DynamicResource FontSizeXS}"
+                                                   Foreground="{DynamicResource AccentBrush}"
+                                                   Margin="0,3,0,0" />
+                                    </StackPanel>
+
+                                    <!-- Status -->
+                                    <Border Grid.Column="2"
+                                            Background="{Binding Status, Converter={StaticResource StatusToBrush}}"
+                                            CornerRadius="{DynamicResource RadiusSM}"
+                                            Padding="6,3"
+                                            VerticalAlignment="Top">
+                                        <TextBlock Text="{Binding Status}"
+                                                   FontSize="{DynamicResource FontSizeXS}"
+                                                   Foreground="White" />
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

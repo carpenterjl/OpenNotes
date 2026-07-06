@@ -1,0 +1,45 @@
+<Window x:Class="OpenNotes.Dialogs.MultilineInputDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Input" Height="380" Width="560"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource SurfaceBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        WindowStyle="ToolWindow">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="8" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="16" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" x:Name="PromptText"
+                   FontSize="{DynamicResource FontSizeMD}"
+                   Foreground="{DynamicResource TextPrimaryBrush}" />
+
+        <TextBox Grid.Row="2" x:Name="InputTextBox"
+                 Style="{DynamicResource ModernTextBox}"
+                 AcceptsReturn="True" AcceptsTab="True"
+                 TextWrapping="NoWrap"
+                 FontFamily="Consolas,Courier New"
+                 VerticalScrollBarVisibility="Auto"
+                 HorizontalScrollBarVisibility="Auto"
+                 KeyDown="InputTextBox_KeyDown" />
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <TextBlock Text="Ctrl+Enter to accept" VerticalAlignment="Center" Margin="0,0,16,0"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       FontSize="{DynamicResource FontSizeXS}" />
+            <Button Content="Cancel" Width="72" Margin="0,0,8,0"
+                    Style="{DynamicResource SecondaryButton}"
+                    Click="Cancel_Click" />
+            <Button Content="OK" Width="72"
+                    Style="{DynamicResource PrimaryButton}"
+                    IsDefault="True"
+                    Click="OK_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

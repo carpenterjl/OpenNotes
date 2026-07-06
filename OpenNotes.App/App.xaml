@@ -1,0 +1,20 @@
+<Application x:Class="OpenNotes.App"
+             DispatcherUnhandledException="App_DispatcherUnhandledException"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnMainWindowClose">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Default theme — dark. Swapped at runtime by ThemeService -->
+                <ResourceDictionary Source="pack://application:,,,/Themes/DarkTheme.xaml" />
+                <!-- Shared control styles -->
+                <ResourceDictionary Source="pack://application:,,,/Styles/ControlStyles.xaml" />
+                <!-- Shared value converters (global so DataTemplate-loaded views can resolve them) -->
+                <ResourceDictionary Source="pack://application:,,,/Converters/Converters.xaml" />
+                <!-- Themed Markdig.Wpf styles (code/quote/rule/link follow the active theme) -->
+                <ResourceDictionary Source="pack://application:,,,/Styles/MarkdownStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

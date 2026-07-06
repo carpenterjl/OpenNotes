@@ -1,0 +1,15 @@
+<UserControl x:Class="OpenNotes.Views.Blocks.TextBlockView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <TextBox Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 Style="{StaticResource ModernTextBox}"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 MinHeight="60"
+                 VerticalScrollBarVisibility="Auto"
+                 FontFamily="Segoe UI"
+                 FontSize="{DynamicResource FontSizeMD}"
+                 Tag="Plain text..." />
+    </Grid>
+</UserControl>

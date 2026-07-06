@@ -1,0 +1,732 @@
+<UserControl x:Class="OpenNotes.Views.CanvasEditorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:OpenNotes.Converters"
+             xmlns:vm="clr-namespace:OpenNotes.ViewModels"
+             xmlns:wpfmath="clr-namespace:WpfMath.Controls;assembly=WpfMath"
+             xmlns:md="clr-namespace:Markdig.Wpf;assembly=Markdig.Wpf"
+             Background="{DynamicResource BackgroundBrush}"
+             Unloaded="View_Unloaded"
+             PreviewKeyDown="View_PreviewKeyDown">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}" />
+    </UserControl.InputBindings>
+
+    <UserControl.Resources>
+        <!-- Subtle theme-independent grid so it reads on both light and dark backgrounds -->
+        <DrawingBrush x:Key="CanvasGridBrush" TileMode="Tile"
+                      Viewport="0,0,20,20" ViewportUnits="Absolute">
+            <DrawingBrush.Drawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="0,0,20,20" />
+                    </GeometryDrawing.Geometry>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#33888888" Thickness="0.5" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingBrush.Drawing>
+        </DrawingBrush>
+
+        <!-- Shared visual for all 8 resize-grip Thumbs -->
+        <ControlTemplate x:Key="ResizeHandleTemplate" TargetType="Thumb">
+            <Border Background="{DynamicResource CanvasAccentBrush}" CornerRadius="2" Opacity="0.75" />
+        </ControlTemplate>
+        <!-- No PreviewMouseLeftButtonDown interception here: Thumb's own drag-initiation logic is
+             itself wired to the tunneling PreviewMouseLeftButtonDown, and marking that handled early
+             corrupts the mouse-capture handshake for both this Thumb and any ancestor Thumb (breaks
+             dragging entirely). The bubbling e.Handled=true already set inside Resize_DragDelta/
+             Resize_DragStarted/Resize_DragCompleted (Thumb-specific events, raised only after this
+             Thumb's own capture succeeds) is sufficient on its own to stop the outer node Thumb's
+             Node_DragDelta from also firing. -->
+        <Style x:Key="CanvasResizeHandleStyle" TargetType="Thumb">
+            <Setter Property="Tag" Value="{Binding}" />
+            <Setter Property="Template" Value="{StaticResource ResizeHandleTemplate}" />
+            <EventSetter Event="Thumb.DragStarted" Handler="Resize_DragStarted" />
+            <EventSetter Event="Thumb.DragDelta" Handler="Resize_DragDelta" />
+            <EventSetter Event="Thumb.DragCompleted" Handler="Resize_DragCompleted" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" /> <!-- Toolbar -->
+            <RowDefinition Height="Auto" /> <!-- Page tab strip -->
+            <RowDefinition Height="*" />    <!-- Canvas / page overview -->
+        </Grid.RowDefinitions>
+
+        <!-- ===== Toolbar ===== -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="12,8">
+            <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Command="{Binding BackToEditorCommand}"
+                        ToolTip="Save and go back to where this canvas was opened from"
+                        Padding="10,4" Margin="0,0,12,0">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                            <Setter Property="Content" Value="← Editor" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsStandalone}" Value="True">
+                                    <Setter Property="Content" Value="← Canvases" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+
+                <!-- Tools -->
+                <TextBlock Text="Tools" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           FontSize="{DynamicResource FontSizeXS}" Margin="0,0,8,0" />
+                <RadioButton GroupName="Tool" Content="Select" Margin="0,0,6,0" VerticalContentAlignment="Center"
+                             IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Select}" />
+                <RadioButton GroupName="Tool" Content="▭ Rect" Margin="0,0,6,0" VerticalContentAlignment="Center"
+                             IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Rectangle}" />
+                <RadioButton GroupName="Tool" Content="◯ Ellipse" Margin="0,0,6,0" VerticalContentAlignment="Center"
+                             IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Ellipse}" />
+                <RadioButton GroupName="Tool" Content="◇ Diamond" Margin="0,0,6,0" VerticalContentAlignment="Center"
+                             IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Diamond}" />
+                <RadioButton GroupName="Tool" Content="T Text" Margin="0,0,6,0" VerticalContentAlignment="Center"
+                             IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Text}" />
+                <RadioButton GroupName="Tool" Content="↳ Connector" Margin="0,0,6,0" VerticalContentAlignment="Center"
+                             IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Connector}" />
+                <RadioButton GroupName="Tool" Content="✚ New Task" Margin="0,0,12,0" VerticalContentAlignment="Center"
+                             ToolTip="Click the canvas to create a new task and drop a link to it"
+                             IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=NewTask}" />
+
+                <Separator Width="1" Height="20" Margin="4,0,12,0" Background="{DynamicResource BorderBrush}" />
+
+                <!-- Ink tools (Phase 3 markup layer) -->
+                <TextBlock Text="Ink" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           FontSize="{DynamicResource FontSizeXS}" Margin="0,0,8,0" />
+                <RadioButton GroupName="Tool" Content="✒ Pen" Margin="0,0,6,0" VerticalContentAlignment="Center"
+                             IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Pen}" />
+                <RadioButton GroupName="Tool" Content="🖊 Marker" Margin="0,0,6,0" VerticalContentAlignment="Center"
+                             IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Marker}" />
+                <RadioButton GroupName="Tool" Content="🖍 Highlight" Margin="0,0,6,0" VerticalContentAlignment="Center"
+                             IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Highlighter}" />
+                <RadioButton GroupName="Tool" Content="⌫ Erase Ink" Margin="0,0,8,0" VerticalContentAlignment="Center"
+                             ToolTip="Click or sweep over ink to erase it — floating strokes and ink drawn onto shapes alike"
+                             IsChecked="{Binding ActiveTool, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=InkEraser}" />
+
+                <!-- Ink color swatches; the outlined border shows the current color -->
+                <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1.5" CornerRadius="3"
+                        VerticalAlignment="Center" Margin="0,0,6,0" Padding="2"
+                        ToolTip="Current ink color">
+                    <Border Width="14" Height="14" CornerRadius="2"
+                            Background="{Binding InkColor, Converter={StaticResource StringToBrushConverter}}" />
+                </Border>
+                <ItemsControl VerticalAlignment="Center" Margin="0,0,12,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Width="16" Height="16" Margin="2,0" Padding="0"
+                                    BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}"
+                                    Background="{Binding Converter={StaticResource StringToBrushConverter}}"
+                                    Command="{Binding DataContext.SetInkColorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip="{Binding}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                    <ItemsControl.ItemsSource>
+                        <x:Array Type="{x:Type sys:String}" xmlns:sys="clr-namespace:System;assembly=mscorlib">
+                            <sys:String>#222222</sys:String>
+                            <sys:String>#D32F2F</sys:String>
+                            <sys:String>#1976D2</sys:String>
+                            <sys:String>#388E3C</sys:String>
+                            <sys:String>#F57C00</sys:String>
+                            <sys:String>#FFEB3B</sys:String>
+                        </x:Array>
+                    </ItemsControl.ItemsSource>
+                </ItemsControl>
+
+                <Separator Width="1" Height="20" Margin="0,0,12,0" Background="{DynamicResource BorderBrush}" />
+
+                <!-- Insert one of the task's content blocks as a snapshot node -->
+                <Menu Background="Transparent" VerticalAlignment="Center" Margin="0,0,12,0">
+                    <MenuItem Header="Insert Block ▾" ItemsSource="{Binding AvailableBlocks}"
+                              ToolTip="Place a snapshot of one of this task's content blocks (does not stay in sync)">
+                        <MenuItem.ItemContainerStyle>
+                            <Style TargetType="MenuItem">
+                                <Setter Property="Header" Value="{Binding Converter={StaticResource BlockPreviewConverter}}" />
+                                <Setter Property="Command"
+                                        Value="{Binding DataContext.InsertBlockCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                <Setter Property="CommandParameter" Value="{Binding}" />
+                            </Style>
+                        </MenuItem.ItemContainerStyle>
+                    </MenuItem>
+                </Menu>
+
+                <!-- Author a brand-new content block on the canvas (add to the task via its context menu) -->
+                <Menu Background="Transparent" VerticalAlignment="Center" Margin="0,0,12,0">
+                    <MenuItem Header="New Block ▾"
+                              ToolTip="Create a new content block on the canvas; right-click it to add it to the task">
+                        <MenuItem Header="📄 Text" Command="{Binding CreateBlockNodeCommand}" CommandParameter="text" />
+                        <MenuItem Header="📝 Markdown" Command="{Binding CreateBlockNodeCommand}" CommandParameter="markdown" />
+                        <MenuItem Header="☑ Checklist" Command="{Binding CreateBlockNodeCommand}" CommandParameter="checklist" />
+                        <MenuItem Header="∑ LaTeX" Command="{Binding CreateBlockNodeCommand}" CommandParameter="latex" />
+                        <MenuItem Header="💻 Code" Command="{Binding CreateBlockNodeCommand}" CommandParameter="code" />
+                        <MenuItem Header="📊 Mermaid" Command="{Binding CreateBlockNodeCommand}" CommandParameter="mermaid" />
+                        <MenuItem Header="🖼 Image" Command="{Binding CreateBlockNodeCommand}" CommandParameter="image" />
+                    </MenuItem>
+                </Menu>
+
+                <Separator Width="1" Height="20" Margin="0,0,12,0" Background="{DynamicResource BorderBrush}" />
+
+                <CheckBox Content="Grid" IsChecked="{Binding ShowGrid}" VerticalContentAlignment="Center" Margin="0,0,10,0" />
+                <CheckBox Content="Snap" IsChecked="{Binding SnapToGrid}" VerticalContentAlignment="Center" Margin="0,0,12,0" />
+
+                <TextBlock Text="Zoom" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           FontSize="{DynamicResource FontSizeXS}" Margin="0,0,6,0" />
+                <Slider Minimum="0.25" Maximum="2.5" Value="{Binding Zoom}"
+                        Width="110" VerticalAlignment="Center"
+                        TickFrequency="0.25" IsSnapToTickEnabled="True" Margin="0,0,6,0" />
+                <TextBlock Text="{Binding Zoom, StringFormat={}{0:P0}}" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           FontSize="{DynamicResource FontSizeXS}" MinWidth="40" Margin="0,0,12,0" />
+
+                <Separator Width="1" Height="20" Margin="0,0,12,0" Background="{DynamicResource BorderBrush}" />
+
+                <Button Content="📐 Page Size"
+                        Style="{StaticResource SecondaryButton}"
+                        Command="{Binding ShowCanvasSizeDialogCommand}"
+                        ToolTip="Set the canvas page size (standard presets or custom pixel dimensions)"
+                        Padding="10,4" Margin="0,0,6,0" />
+                <Button Content="🎨 Colors"
+                        Style="{StaticResource SecondaryButton}"
+                        Command="{Binding EditThemeCommand}"
+                        ToolTip="Customize this canvas's colors (saved with the document; Mermaid diagrams are re-rendered)"
+                        Padding="10,4" Margin="0,0,6,0" />
+                <Button Content="📄 Export PDF"
+                        Style="{StaticResource SecondaryButton}"
+                        Command="{Binding ExportPdfCommand}"
+                        ToolTip="Export all pages as a PDF (selectable text, vector shapes and ink, high-DPI LaTeX/Mermaid)"
+                        Padding="10,4" Margin="0,0,12,0" />
+
+                <Separator Width="1" Height="20" Margin="0,0,12,0" Background="{DynamicResource BorderBrush}" />
+
+                <Button Content="🗑 Delete"
+                        Style="{StaticResource SecondaryButton}"
+                        Command="{Binding DeleteSelectedCommand}"
+                        ToolTip="Delete the selected shape (Del)"
+                        Padding="10,4" Margin="0,0,6,0" />
+                <Button Content="Save"
+                        Style="{StaticResource PrimaryButton}"
+                        Command="{Binding SaveCommand}"
+                        Padding="12,4" />
+                <TextBlock Text="● Unsaved" VerticalAlignment="Center"
+                           Foreground="{DynamicResource AccentBrush}"
+                           FontSize="{DynamicResource FontSizeXS}" Margin="10,0,0,0"
+                           Visibility="{Binding IsDirty, Converter={StaticResource BoolToVisibilityConverter}}" />
+            </WrapPanel>
+        </Border>
+
+        <!-- ===== Page tab strip ===== -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="8,3">
+            <DockPanel LastChildFill="True">
+                <Button DockPanel.Dock="Right"
+                        Content="⊞ Overview"
+                        Style="{StaticResource SecondaryButton}"
+                        Command="{Binding ToggleOverviewCommand}"
+                        ToolTip="Show all pages as a thumbnail grid"
+                        Padding="10,2" Margin="6,0,0,0" />
+                <Button DockPanel.Dock="Right"
+                        Content="✚ Page"
+                        Style="{StaticResource SecondaryButton}"
+                        Command="{Binding AddPageCommand}"
+                        ToolTip="Add a new page"
+                        Padding="10,2" Margin="6,0,0,0" />
+                <!-- Only ONE page's canvas is ever in the visual tree; these tabs are metadata-only. -->
+                <ListBox ItemsSource="{Binding Pages}"
+                         SelectedItem="{Binding SelectedPage}"
+                         Background="Transparent" BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Title}" Padding="10,3"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                <TextBlock.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Rename…"
+                                                  Command="{Binding PlacementTarget.Tag.RenamePageCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Move left"
+                                                  Command="{Binding PlacementTarget.Tag.MovePageLeftCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Move right"
+                                                  Command="{Binding PlacementTarget.Tag.MovePageRightCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <Separator />
+                                        <MenuItem Header="Delete page…"
+                                                  Command="{Binding PlacementTarget.Tag.DeletePageCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                    </ContextMenu>
+                                </TextBlock.ContextMenu>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <!-- ===== Canvas surface ===== -->
+        <ScrollViewer Grid.Row="2"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto"
+                      Background="{DynamicResource BackgroundBrush}"
+                      Visibility="{Binding IsOverviewVisible, Converter={StaticResource InvertBoolToVisibilityConverter}}">
+            <Grid x:Name="CanvasRoot" Width="{Binding CanvasWidth}" Height="{Binding CanvasHeight}"
+                  HorizontalAlignment="Left" VerticalAlignment="Top">
+                <Grid.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
+                </Grid.LayoutTransform>
+
+                <!-- Hit-test + placement surface. Right-click (Select tool only — see
+                     Surface_ContextMenuOpening) opens the quick-create menu; every "here" item
+                     lands at the clicked canvas point captured into the VM's context point. -->
+                <Rectangle x:Name="GridSurface" Fill="Transparent"
+                           MouseLeftButtonDown="Surface_MouseLeftButtonDown"
+                           MouseMove="Surface_MouseMove"
+                           MouseLeftButtonUp="Surface_MouseLeftButtonUp"
+                           LostMouseCapture="Surface_LostMouseCapture"
+                           ContextMenuOpening="Surface_ContextMenuOpening">
+                    <Rectangle.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="▭ Rectangle here"
+                                      Command="{Binding PlacementTarget.DataContext.PlaceShapeAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="Rectangle" />
+                            <MenuItem Header="◯ Ellipse here"
+                                      Command="{Binding PlacementTarget.DataContext.PlaceShapeAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="Ellipse" />
+                            <MenuItem Header="◇ Diamond here"
+                                      Command="{Binding PlacementTarget.DataContext.PlaceShapeAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="Diamond" />
+                            <MenuItem Header="T Text here"
+                                      Command="{Binding PlacementTarget.DataContext.PlaceShapeAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="Text" />
+                            <MenuItem Header="✚ New Task here"
+                                      Command="{Binding PlacementTarget.DataContext.NewTaskAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <Separator />
+                            <MenuItem Header="Insert Block"
+                                      ItemsSource="{Binding PlacementTarget.DataContext.AvailableBlocks, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                <MenuItem.ItemContainerStyle>
+                                    <Style TargetType="MenuItem">
+                                        <Setter Property="Header" Value="{Binding Converter={StaticResource BlockPreviewConverter}}" />
+                                        <Setter Property="Command"
+                                                Value="{Binding PlacementTarget.DataContext.InsertBlockAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <Setter Property="CommandParameter" Value="{Binding}" />
+                                    </Style>
+                                </MenuItem.ItemContainerStyle>
+                            </MenuItem>
+                            <MenuItem Header="New Block">
+                                <MenuItem Header="📄 Text"
+                                          Command="{Binding PlacementTarget.DataContext.CreateBlockNodeAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="text" />
+                                <MenuItem Header="📝 Markdown"
+                                          Command="{Binding PlacementTarget.DataContext.CreateBlockNodeAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="markdown" />
+                                <MenuItem Header="☑ Checklist"
+                                          Command="{Binding PlacementTarget.DataContext.CreateBlockNodeAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="checklist" />
+                                <MenuItem Header="∑ LaTeX"
+                                          Command="{Binding PlacementTarget.DataContext.CreateBlockNodeAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="latex" />
+                                <MenuItem Header="💻 Code"
+                                          Command="{Binding PlacementTarget.DataContext.CreateBlockNodeAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="code" />
+                                <MenuItem Header="📊 Mermaid"
+                                          Command="{Binding PlacementTarget.DataContext.CreateBlockNodeAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="mermaid" />
+                                <MenuItem Header="🖼 Image"
+                                          Command="{Binding PlacementTarget.DataContext.CreateBlockNodeAtContextPointCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="image" />
+                            </MenuItem>
+                            <Separator />
+                            <MenuItem Header="📐 Page Size…"
+                                      Command="{Binding PlacementTarget.DataContext.ShowCanvasSizeDialogCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="💾 Save"
+                                      Command="{Binding PlacementTarget.DataContext.SaveCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        </ContextMenu>
+                    </Rectangle.ContextMenu>
+                </Rectangle>
+
+                <!-- Grid overlay (non-interactive) -->
+                <Rectangle Fill="{StaticResource CanvasGridBrush}" IsHitTestVisible="False"
+                           Visibility="{Binding ShowGrid, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <!-- Connectors (behind nodes) -->
+                <ItemsControl ItemsSource="{Binding Connectors}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><Canvas /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Canvas>
+                                <!-- Visual line (purely decorative; the wide overlay below handles hit-testing) -->
+                                <Line X1="{Binding StartPoint.X}" Y1="{Binding StartPoint.Y}"
+                                      X2="{Binding EndPoint.X}" Y2="{Binding EndPoint.Y}"
+                                      Stroke="{Binding Color, Converter={StaticResource StringToBrushConverter}}"
+                                      StrokeThickness="{Binding Thickness}"
+                                      StrokeDashArray="{Binding StrokeDashArray}"
+                                      IsHitTestVisible="False" />
+                                <!-- Selection feedback -->
+                                <Line X1="{Binding StartPoint.X}" Y1="{Binding StartPoint.Y}"
+                                      X2="{Binding EndPoint.X}" Y2="{Binding EndPoint.Y}"
+                                      Stroke="{DynamicResource CanvasAccentBrush}"
+                                      StrokeThickness="3" StrokeDashArray="3 2"
+                                      IsHitTestVisible="False"
+                                      Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <Polygon Points="{Binding ArrowHead}"
+                                         Fill="{Binding Color, Converter={StaticResource StringToBrushConverter}}"
+                                         IsHitTestVisible="False" />
+                                <!-- Invisible wide hit-test overlay: the visual line is too thin to click reliably -->
+                                <Line X1="{Binding StartPoint.X}" Y1="{Binding StartPoint.Y}"
+                                      X2="{Binding EndPoint.X}" Y2="{Binding EndPoint.Y}"
+                                      Stroke="Transparent" StrokeThickness="14"
+                                      Cursor="Hand"
+                                      MouseLeftButtonDown="Connector_MouseLeftButtonDown">
+                                    <Line.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Delete connector"
+                                                      Command="{Binding PlacementTarget.DataContext.Owner.DeleteConnectorCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        </ContextMenu>
+                                    </Line.ContextMenu>
+                                </Line>
+                            </Canvas>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Nodes -->
+                <ItemsControl x:Name="NodesItemsControl" ItemsSource="{Binding Nodes}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><Canvas /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Canvas.Left" Value="{Binding X}" />
+                            <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Thumb Width="{Binding Width}" Height="{Binding Height}" Tag="{Binding}"
+                                   Cursor="SizeAll"
+                                   PreviewMouseLeftButtonDown="Node_PreviewMouseLeftButtonDown"
+                                   MouseDoubleClick="Node_MouseDoubleClick"
+                                   DragStarted="Node_DragStarted"
+                                   DragDelta="Node_DragDelta"
+                                   DragCompleted="Node_DragCompleted">
+                                <Thumb.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Edit content…"
+                                                  Command="{Binding PlacementTarget.DataContext.Owner.EditNodeContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Add / Update in task"
+                                                  Command="{Binding PlacementTarget.DataContext.Owner.CommitNodeToTaskCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Clear ink"
+                                                  Command="{Binding PlacementTarget.DataContext.Owner.ClearNodeInkCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <!-- OneWay checkmark: the command drives the change (undoably); a TwoWay
+                                             IsChecked binding would bypass the undo stack. -->
+                                        <MenuItem Header="Show border" IsCheckable="True"
+                                                  IsChecked="{Binding PlacementTarget.DataContext.ShowBorder, RelativeSource={RelativeSource AncestorType=ContextMenu}, Mode=OneWay}"
+                                                  Command="{Binding PlacementTarget.DataContext.Owner.ToggleNodeBorderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <Separator />
+                                        <MenuItem Header="Bring to front"
+                                                  Command="{Binding PlacementTarget.DataContext.Owner.BringNodeToFrontCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Bring forward"
+                                                  Command="{Binding PlacementTarget.DataContext.Owner.BringNodeForwardCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Send backward"
+                                                  Command="{Binding PlacementTarget.DataContext.Owner.SendNodeBackwardCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Send to back"
+                                                  Command="{Binding PlacementTarget.DataContext.Owner.SendNodeToBackCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <Separator />
+                                        <MenuItem Header="Delete"
+                                                  Command="{Binding PlacementTarget.DataContext.Owner.DeleteNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                    </ContextMenu>
+                                </Thumb.ContextMenu>
+                                <Thumb.Template>
+                                    <ControlTemplate TargetType="Thumb">
+                                        <Grid>
+                                            <Grid.Resources>
+                                                <!-- ShowBorder toggle (context menu): StrokeThickness lives in the
+                                                     style setter (a local attribute would defeat the trigger). -->
+                                                <Style x:Key="BorderToggleShape" TargetType="Shape">
+                                                    <Setter Property="StrokeThickness" Value="1.5" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ShowBorder}" Value="False">
+                                                            <Setter Property="StrokeThickness" Value="0" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                                <Style x:Key="BorderToggleSticky" TargetType="Shape">
+                                                    <Setter Property="StrokeThickness" Value="1" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ShowBorder}" Value="False">
+                                                            <Setter Property="StrokeThickness" Value="0" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Grid.Resources>
+                                            <Rectangle RadiusX="4" RadiusY="4" Style="{StaticResource BorderToggleShape}"
+                                                       Fill="{Binding FillColor, Converter={StaticResource StringToBrushConverter}}"
+                                                       Stroke="{Binding StrokeColor, Converter={StaticResource StringToBrushConverter}}"
+                                                       Visibility="{Binding Shape, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Rectangle}" />
+                                            <Ellipse Style="{StaticResource BorderToggleShape}"
+                                                     Fill="{Binding FillColor, Converter={StaticResource StringToBrushConverter}}"
+                                                     Stroke="{Binding StrokeColor, Converter={StaticResource StringToBrushConverter}}"
+                                                     Visibility="{Binding Shape, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Ellipse}" />
+                                            <Path Stretch="Fill" Style="{StaticResource BorderToggleShape}"
+                                                  Fill="{Binding FillColor, Converter={StaticResource StringToBrushConverter}}"
+                                                  Stroke="{Binding StrokeColor, Converter={StaticResource StringToBrushConverter}}"
+                                                  Data="M0.5,0 L1,0.5 L0.5,1 L0,0.5 Z"
+                                                  Visibility="{Binding Shape, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Diamond}" />
+
+                                            <!-- Sticky note (markdown snapshot) -->
+                                            <Rectangle RadiusX="2" RadiusY="2" Style="{StaticResource BorderToggleSticky}"
+                                                       Fill="{DynamicResource SurfaceBrush}"
+                                                       Stroke="{DynamicResource BorderBrush}"
+                                                       Visibility="{Binding Shape, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=StickyNote}" />
+
+                                            <!-- Rendered markdown on the note. Hit-test transparent so
+                                                 single-click still reaches the Thumb (select/drag); double-click
+                                                 opens the markdown editor dialog. Surface + text follow the app
+                                                 theme (and Custom theme) so the note matches the rest of the UI;
+                                                 themed Markdig styles (App.xaml → MarkdownStyles.xaml) re-color
+                                                 code/quotes/links to match. -->
+                                            <md:MarkdownViewer Markdown="{Binding Label}"
+                                                               Visibility="{Binding IsMarkdownNote, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                               IsHitTestVisible="False"
+                                                               Margin="6,4"
+                                                               ClipToBounds="True"
+                                                               TextElement.Foreground="{DynamicResource TextPrimaryBrush}"
+                                                               FontSize="12"
+                                                               ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                                               ScrollViewer.HorizontalScrollBarVisibility="Hidden" />
+
+                                            <!-- Task-link node -->
+                                            <Border CornerRadius="4" Background="#FFF4CE" BorderBrush="#E0C060"
+                                                    Visibility="{Binding Shape, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=TaskLink}">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="BorderThickness" Value="1" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ShowBorder}" Value="False">
+                                                                <Setter Property="BorderThickness" Value="0" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="📌" FontSize="14" Margin="4" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                                            </Border>
+
+                                            <!-- LaTeX snapshot (canvas theme keys: re-brushes instantly on a color commit) -->
+                                            <Border Background="{DynamicResource CanvasSurfaceBrush}" CornerRadius="3" Padding="4"
+                                                    Visibility="{Binding Shape, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Latex}">
+                                                <wpfmath:FormulaControl Formula="{Binding LatexContent, Converter={StaticResource LatexNormalizeConverter}}"
+                                                                        Foreground="{DynamicResource CanvasTextBrush}"
+                                                                        Scale="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <!-- Image snapshot -->
+                                            <Image Stretch="Uniform" Margin="2"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                                   Source="{Binding ImagePath, Converter={StaticResource PathToImageSourceConverter}}"
+                                                   Visibility="{Binding Shape, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Image}" />
+
+                                            <!-- SVG snapshot (Mermaid / code): background is transparent since the
+                                                 captured SVG is now self-consistent (Mermaid is genuinely transparent,
+                                                 code renders its own light card) -->
+                                            <Border Background="Transparent" CornerRadius="3"
+                                                    Visibility="{Binding Shape, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Svg}">
+                                                <Image Stretch="Uniform" Margin="2"
+                                                       RenderOptions.BitmapScalingMode="HighQuality"
+                                                       Source="{Binding SvgContent, Converter={StaticResource SvgStringToImageSourceConverter}}" />
+                                            </Border>
+
+                                            <!-- Checklist snapshot -->
+                                            <Border Background="{DynamicResource CanvasSurfaceBrush}" CornerRadius="3"
+                                                    Visibility="{Binding Shape, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Checklist}">
+                                                <TextBlock Text="{Binding Label}" FontFamily="Consolas,Courier New"
+                                                           Foreground="{DynamicResource CanvasTextBrush}"
+                                                           TextWrapping="Wrap" Margin="6" />
+                                            </Border>
+
+                                            <!-- Node-bound ink: strokes re-parented from the floating
+                                                 layer, stored node-local so they travel with the node -->
+                                            <InkPresenter Strokes="{Binding InkStrokes}"
+                                                          IsHitTestVisible="False" ClipToBounds="True" />
+
+                                            <!-- Selection outline -->
+                                            <Rectangle Stroke="{DynamicResource CanvasAccentBrush}" StrokeThickness="2"
+                                                       StrokeDashArray="3 2" Fill="Transparent" IsHitTestVisible="False"
+                                                       Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <!-- Read-only label: click-through (IsHitTestVisible=False) so a single
+                                                 click reaches the Thumb underneath for select+drag, matching every
+                                                 other node shape. Double-click switches to the editable TextBox below. -->
+                                            <TextBlock Text="{Binding Label}"
+                                                       IsHitTestVisible="False"
+                                                       Foreground="{DynamicResource CanvasTextBrush}"
+                                                       TextAlignment="Center" TextWrapping="Wrap"
+                                                       HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                                       Margin="4"
+                                                       Visibility="{Binding ShowLabelTextBlock, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <!-- Inline-editable label: only visible while IsEditingLabel is true -->
+                                            <TextBox x:Name="InlineLabelBox"
+                                                     Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}"
+                                                     Background="Transparent" BorderThickness="0"
+                                                     Foreground="{DynamicResource CanvasTextBrush}"
+                                                     TextAlignment="Center" TextWrapping="Wrap"
+                                                     HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                                     Margin="4"
+                                                     LostFocus="InlineLabel_LostFocus"
+                                                     KeyDown="InlineLabel_KeyDown"
+                                                     Visibility="{Binding ShowLabelTextBox, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <!-- Resize grips: 4 corners + 4 edges, like a standard window. Edge
+                                                 handles deliberately omit the stretched dimension (leaving it at
+                                                 the Auto default) so HorizontalAlignment/VerticalAlignment=Stretch
+                                                 actually spans the whole edge — an explicit Width/Height would
+                                                 override Stretch and shrink the handle to a small centered dot. -->
+                                            <Thumb x:Name="ResizeTopLeft" Style="{StaticResource CanvasResizeHandleStyle}"
+                                                   Width="10" Height="10"
+                                                   HorizontalAlignment="Left" VerticalAlignment="Top" Cursor="SizeNWSE" />
+                                            <Thumb x:Name="ResizeTopRight" Style="{StaticResource CanvasResizeHandleStyle}"
+                                                   Width="10" Height="10"
+                                                   HorizontalAlignment="Right" VerticalAlignment="Top" Cursor="SizeNESW" />
+                                            <Thumb x:Name="ResizeBottomLeft" Style="{StaticResource CanvasResizeHandleStyle}"
+                                                   Width="10" Height="10"
+                                                   HorizontalAlignment="Left" VerticalAlignment="Bottom" Cursor="SizeNESW" />
+                                            <Thumb x:Name="ResizeBottomRight" Style="{StaticResource CanvasResizeHandleStyle}"
+                                                   Width="10" Height="10"
+                                                   HorizontalAlignment="Right" VerticalAlignment="Bottom" Cursor="SizeNWSE" />
+                                            <Thumb x:Name="ResizeTop" Style="{StaticResource CanvasResizeHandleStyle}"
+                                                   HorizontalAlignment="Stretch" VerticalAlignment="Top" Height="8" Margin="12,0"
+                                                   Cursor="SizeNS" />
+                                            <Thumb x:Name="ResizeBottom" Style="{StaticResource CanvasResizeHandleStyle}"
+                                                   HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Height="8" Margin="12,0"
+                                                   Cursor="SizeNS" />
+                                            <Thumb x:Name="ResizeLeft" Style="{StaticResource CanvasResizeHandleStyle}"
+                                                   HorizontalAlignment="Left" VerticalAlignment="Stretch" Width="8" Margin="0,12"
+                                                   Cursor="SizeWE" />
+                                            <Thumb x:Name="ResizeRight" Style="{StaticResource CanvasResizeHandleStyle}"
+                                                   HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="8" Margin="0,12"
+                                                   Cursor="SizeWE" />
+                                        </Grid>
+                                    </ControlTemplate>
+                                </Thumb.Template>
+                            </Thumb>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Floating-ink overlay (Phase 3): topmost layer of the page grid. Hit-test
+                     transparent unless an ink tool is active, so Select/drag/resize on the nodes
+                     underneath keep working. Strokes fully inside a node are re-parented into that
+                     node's own ink on StrokeCollected (see code-behind → VM.HandleStrokeCollected). -->
+                <!-- Drag-to-size preview (shape tools): dashed outline tracking the pressed drag.
+                     Inside the LayoutTransform so it scales with the zoom like everything else. -->
+                <Canvas IsHitTestVisible="False">
+                    <Rectangle x:Name="DragSizePreview" Visibility="Collapsed"
+                               Stroke="{DynamicResource CanvasAccentBrush}" StrokeThickness="1.5"
+                               StrokeDashArray="4 2" Fill="Transparent" />
+                </Canvas>
+
+                <InkCanvas x:Name="InkOverlay"
+                           Background="Transparent"
+                           Strokes="{Binding FloatingStrokes}"
+                           EditingMode="{Binding InkEditingMode}"
+                           DefaultDrawingAttributes="{Binding InkAttributes}"
+                           IsHitTestVisible="{Binding IsInkToolActive}"
+                           StrokeCollected="InkOverlay_StrokeCollected"
+                           StrokeErasing="InkOverlay_StrokeErasing"
+                           PreviewMouseLeftButtonDown="InkOverlay_PreviewMouseLeftButtonDown"
+                           PreviewMouseMove="InkOverlay_PreviewMouseMove"
+                           PreviewMouseRightButtonUp="InkOverlay_PreviewMouseRightButtonUp" />
+            </Grid>
+        </ScrollViewer>
+
+        <!-- ===== Page overview (thumbnail grid) =====
+             Shows only static cached thumbnails — never live LaTeX/Mermaid/AvalonEdit renderers —
+             so 50 pages cost 50 small bitmaps. -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource BackgroundBrush}"
+                Visibility="{Binding IsOverviewVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Pages}" Margin="16">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Command="{Binding DataContext.ActivatePageFromOverviewCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}"
+                                    Cursor="Hand" Margin="0,0,16,16"
+                                    Background="Transparent" BorderThickness="0" Padding="0"
+                                    ToolTip="Open this page">
+                                <Border Background="{DynamicResource SurfaceBrush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1" CornerRadius="6" Padding="10" Width="260">
+                                    <StackPanel>
+                                        <Border Height="150" Background="White" CornerRadius="4"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                            <Grid>
+                                                <TextBlock Text="No preview yet"
+                                                           Foreground="#888888"
+                                                           FontSize="{DynamicResource FontSizeXS}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                <Image Source="{Binding ThumbnailSource}" Stretch="Uniform"
+                                                       RenderOptions.BitmapScalingMode="HighQuality" Margin="2" />
+                                            </Grid>
+                                        </Border>
+                                        <DockPanel Margin="0,8,0,0" LastChildFill="False">
+                                            <TextBlock DockPanel.Dock="Left" Text="{Binding Title}"
+                                                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+                                            <TextBlock DockPanel.Dock="Right"
+                                                       Text="{Binding NodeCount, StringFormat='{}{0} items'}"
+                                                       FontSize="{DynamicResource FontSizeXS}"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        </DockPanel>
+                                    </StackPanel>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

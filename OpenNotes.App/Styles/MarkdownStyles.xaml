@@ -1,0 +1,48 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:mdwpf="clr-namespace:Markdig.Wpf;assembly=Markdig.Wpf">
+
+    <!-- Themed overrides for Markdig.Wpf's default document styles so rendered markdown matches the
+         app theme (and the Custom theme, via DynamicResource). Merged globally in App.xaml, so the
+         task-view block, canvas sticky notes, and the off-tree PDF renderer all pick them up.
+         Body text and headings deliberately have NO override here — they inherit the container's
+         TextElement.Foreground (set to a theme brush at each MarkdownViewer), which keeps Markdig's
+         default heading sizes/weights intact. Only elements whose defaults hardcode light colors
+         (code, quotes, rules, links) are re-themed. -->
+
+    <!-- Inline code -->
+    <Style TargetType="Run" x:Key="{x:Static mdwpf:Styles.CodeStyleKey}">
+        <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}" />
+        <Setter Property="Foreground" Value="{DynamicResource CodeTextBrush}" />
+        <Setter Property="Background" Value="{DynamicResource CodeBackgroundBrush}" />
+    </Style>
+
+    <!-- Fenced / indented code blocks -->
+    <Style TargetType="Paragraph" x:Key="{x:Static mdwpf:Styles.CodeBlockStyleKey}">
+        <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}" />
+        <Setter Property="Foreground" Value="{DynamicResource CodeTextBrush}" />
+        <Setter Property="Background" Value="{DynamicResource CodeBackgroundBrush}" />
+        <Setter Property="Padding" Value="8" />
+    </Style>
+
+    <!-- Block quotes -->
+    <Style TargetType="Section" x:Key="{x:Static mdwpf:Styles.QuoteBlockStyleKey}">
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="BorderThickness" Value="4,0,0,0" />
+        <Setter Property="Padding" Value="12,0,0,0" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+
+    <!-- Horizontal rules -->
+    <Style TargetType="Line" x:Key="{x:Static mdwpf:Styles.ThematicBreakStyleKey}">
+        <Setter Property="Stretch" Value="Fill" />
+        <Setter Property="Stroke" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="X2" Value="1" />
+    </Style>
+
+    <!-- Links -->
+    <Style TargetType="Hyperlink" x:Key="{x:Static mdwpf:Styles.HyperlinkStyleKey}">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+</ResourceDictionary>
