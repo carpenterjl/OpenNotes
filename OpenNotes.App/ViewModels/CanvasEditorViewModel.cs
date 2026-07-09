@@ -32,6 +32,7 @@ public partial class CanvasEditorViewModel : ViewModelBase
     private readonly IUndoRedoService _undoRedo;
     private readonly IDialogService _dialogs;
     private readonly IMermaidSvgExporter _mermaidExporter;
+    private readonly ILatexPngRenderer _latexRenderer;
     private readonly ICanvasThemeService _canvasTheme;
     private readonly ICanvasPdfExporter _pdfExporter;
     private readonly IThemeService _themeService;
@@ -142,6 +143,7 @@ public partial class CanvasEditorViewModel : ViewModelBase
         IUndoRedoService undoRedo,
         IDialogService dialogs,
         IMermaidSvgExporter mermaidExporter,
+        ILatexPngRenderer latexRenderer,
         ICanvasThemeService canvasTheme,
         ICanvasPdfExporter pdfExporter,
         IThemeService themeService,
@@ -155,6 +157,7 @@ public partial class CanvasEditorViewModel : ViewModelBase
         _undoRedo = undoRedo;
         _dialogs = dialogs;
         _mermaidExporter = mermaidExporter;
+        _latexRenderer = latexRenderer;
         _canvasTheme = canvasTheme;
         _pdfExporter = pdfExporter;
         _themeService = themeService;
@@ -265,6 +268,39 @@ public partial class CanvasEditorViewModel : ViewModelBase
         if (SelectedPage is not null)
             ActivatePage(SelectedPage);
         IsDirty = false;
+
+        // Legacy Latex nodes (saved in the WpfMath FormulaControl era) have no rendered PNG —
+        // self-heal them lazily so they show real KaTeX output instead of the raw-source fallback.
+        _ = SelfHealLatexNodesAsync();
+    }
+
+    /// <summary>Render a KaTeX PNG for every Latex node that doesn't have one yet (all pages).
+    /// Best-effort: a failure just leaves the raw-source fallback visible.</summary>
+    private async Task SelfHealLatexNodesAsync()
+    {
+        try
+        {
+            static bool NeedsPng(DiagramNode n) =>
+                IsLatexNode(n) && (string.IsNullOrEmpty(n.ImagePath) || !File.Exists(n.ImagePath));
+
+            foreach (var vm in Nodes.Where(n => NeedsPng(n.Node)).ToList())
+            {
+                var path = await RenderLatexPngPathAsync(vm.Node.LatexContent!);
+                if (path is not null) vm.ImagePath = path;
+            }
+            foreach (var page in _document.Pages.Where(p => p != SelectedPage?.Page))
+            {
+                foreach (var node in page.Diagram.Nodes.Where(NeedsPng))
+                {
+                    var path = await RenderLatexPngPathAsync(node.LatexContent!);
+                    if (path is not null) node.ImagePath = path;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "LaTeX node self-heal render failed.");
+        }
     }
 
     partial void OnSelectedPageChanged(CanvasPageViewModel? oldValue, CanvasPageViewModel? newValue)
@@ -546,6 +582,11 @@ public partial class CanvasEditorViewModel : ViewModelBase
             var node = await BlockToNodeMapper.ToNodeAsync(block, x, y, layerId, _mermaidExporter,
                 SaveMermaidPngAsync, MermaidThemeVariables, BuildCodePalette());
 
+            // LaTeX snapshots render to a KaTeX PNG here in the VM (the mapper stays WebView2-free
+            // for LaTeX); a failed render leaves the raw-source fallback visible in the node.
+            if (IsLatexNode(node))
+                node.ImagePath = await RenderLatexPngPathAsync(node.LatexContent!) ?? node.ImagePath;
+
             var vm = new CanvasNodeViewModel(node) { Owner = this };
             _undoRedo.Push(new AddNodeCommand(this, vm));
             SelectNode(vm);
@@ -679,13 +720,31 @@ public partial class CanvasEditorViewModel : ViewModelBase
     /// <summary>Save a captured Mermaid PNG into the workspace's attachments folder and return its path,
     /// so the node can render it via the same <see cref="NodeShape.Image"/>/<c>ImagePath</c> pipeline
     /// already used for user-uploaded images (no separate raster-storage plumbing needed).</summary>
-    private async Task<string> SaveMermaidPngAsync(byte[] png)
+    private async Task<string> SaveMermaidPngAsync(byte[] png) => await SaveRenderedPngAsync(png, "mermaid");
+
+    private async Task<string> SaveRenderedPngAsync(byte[] png, string prefix)
     {
         var folder = _workspaceRepository.GetAttachmentsFolder(_workspaceId);
         Directory.CreateDirectory(folder);
-        var path = Path.Combine(folder, $"mermaid-{Guid.NewGuid()}.png");
+        var path = Path.Combine(folder, $"{prefix}-{Guid.NewGuid()}.png");
         await File.WriteAllBytesAsync(path, png);
         return path;
+    }
+
+    /// <summary>The effective canvas text color (document override else theme default) as hex —
+    /// the color KaTeX bakes into LaTeX node PNGs, matching FormulaControl-era theming.</summary>
+    private static string CurrentCanvasTextHex() =>
+        System.Windows.Application.Current?.TryFindResource("CanvasTextBrush")
+            is System.Windows.Media.SolidColorBrush b
+            ? $"#{b.Color.R:X2}{b.Color.G:X2}{b.Color.B:X2}"
+            : "#E0E0E0";
+
+    /// <summary>Render a LaTeX node's formula to a KaTeX PNG and return its saved path, or null
+    /// when rendering is unavailable (the node then shows its raw-source fallback).</summary>
+    private async Task<string?> RenderLatexPngPathAsync(string formula)
+    {
+        var png = await _latexRenderer.RenderToPngAsync(formula, CurrentCanvasTextHex());
+        return png is null ? null : await SaveRenderedPngAsync(png, "latex");
     }
 
     /// <summary>Edit a block-backed node's content with a type-appropriate editor; re-renders Code/Mermaid.</summary>
@@ -715,9 +774,11 @@ public partial class CanvasEditorViewModel : ViewModelBase
                 }
                 case "latex":
                 {
-                    var r = await _dialogs.ShowMultilineInputAsync("Edit LaTeX", "Formula (multi-line and % comments supported):", node.AuthoredSource ?? node.LatexContent ?? "");
+                    var r = await _dialogs.ShowMultilineInputAsync("Edit LaTeX", "Formula (full KaTeX support; $/$$ delimiters optional):", node.AuthoredSource ?? node.LatexContent ?? "");
                     if (r is null) return;
                     node.AuthoredSource = r; node.LatexContent = r;
+                    var latexPng = await RenderLatexPngPathAsync(r);
+                    if (latexPng is not null) node.ImagePath = latexPng;
                     break;
                 }
                 case "image":
@@ -736,7 +797,7 @@ public partial class CanvasEditorViewModel : ViewModelBase
                     node.AuthoredSource = r.Value.Code;
                     node.AuthoredLanguage = r.Value.Language;
                     node.SvgContent = CodeToSvgRenderer.Render(
-                        r.Value.Code, r.Value.Language, showLineNumbers: true, BuildCodePalette());
+                        r.Value.Code, r.Value.Language, node.Node.AuthoredShowLineNumbers, BuildCodePalette());
                     break;
                 }
                 case "mermaid":
@@ -1100,7 +1161,13 @@ public partial class CanvasEditorViewModel : ViewModelBase
         }
         foreach (var vm in Nodes.Where(n => IsRenderedCode(n.Node)).ToList())
             vm.SvgContent = CodeToSvgRenderer.Render(
-                vm.AuthoredSource!, vm.Node.AuthoredLanguage ?? "plaintext", showLineNumbers: true, codePalette);
+                vm.AuthoredSource!, vm.Node.AuthoredLanguage ?? "plaintext", vm.Node.AuthoredShowLineNumbers, codePalette);
+
+        foreach (var vm in Nodes.Where(n => IsLatexNode(n.Node)).ToList())
+        {
+            var path = await RenderLatexPngPathAsync(vm.Node.LatexContent!);
+            if (path is not null) vm.ImagePath = path;
+        }
 
         foreach (var page in _document.Pages.Where(p => p != SelectedPage?.Page))
         {
@@ -1112,9 +1179,20 @@ public partial class CanvasEditorViewModel : ViewModelBase
             }
             foreach (var node in page.Diagram.Nodes.Where(IsRenderedCode))
                 node.SvgContent = CodeToSvgRenderer.Render(
-                    node.AuthoredSource!, node.AuthoredLanguage ?? "plaintext", showLineNumbers: true, codePalette);
+                    node.AuthoredSource!, node.AuthoredLanguage ?? "plaintext", node.AuthoredShowLineNumbers, codePalette);
+            foreach (var node in page.Diagram.Nodes.Where(IsLatexNode))
+            {
+                var path = await RenderLatexPngPathAsync(node.LatexContent!);
+                if (path is not null) node.ImagePath = path;
+            }
         }
     }
+
+    /// <summary>A LaTeX node with authored content — its PNG bakes in the canvas text color, so
+    /// it re-renders on theme/color changes (and self-heals legacy WpfMath-era nodes that have no
+    /// PNG at all).</summary>
+    private static bool IsLatexNode(DiagramNode node) =>
+        node.Shape == NodeShape.Latex && !string.IsNullOrWhiteSpace(node.LatexContent);
 
     /// <summary>A code node with a rendered SVG snapshot to re-color.</summary>
     private static bool IsRenderedCode(DiagramNode node) =>

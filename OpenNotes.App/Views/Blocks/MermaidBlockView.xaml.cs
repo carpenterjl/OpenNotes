@@ -39,6 +39,8 @@ public partial class MermaidBlockView : UserControl
             await MermaidWebView.EnsureCoreWebView2Async();
             Serilog.Log.Debug("Mermaid preview: CoreWebView2 ready ({Version})",
                 MermaidWebView.CoreWebView2.Environment.BrowserVersionString);
+            // Bundled offline mermaid.min.js resolves through the opennotes.assets virtual host.
+            Services.WebViewAssets.ConfigureVirtualHost(MermaidWebView.CoreWebView2);
             MermaidWebView.CoreWebView2.Settings.IsWebMessageEnabled = true;
             MermaidWebView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
             _webViewReady = true;

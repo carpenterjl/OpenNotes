@@ -96,6 +96,7 @@ public static class BlockToNodeMapper
                 node.BlockKind = "code";
                 node.AuthoredSource = code.Code;
                 node.AuthoredLanguage = code.Language;
+                node.AuthoredShowLineNumbers = code.ShowLineNumbers;
                 node.SvgContent = CodeToSvgRenderer.Render(code.Code, code.Language, code.ShowLineNumbers, codePalette);
                 node.Width = 320; node.Height = 200;
                 break;

@@ -26,9 +26,14 @@ public sealed class AppSettingsService : IAppSettingsService
         _persistence = persistence;
         _filePath = filePath;
 
-        // Eager, blocking load: the file is a few hundred bytes and this runs on the DI build
-        // thread (no WPF sync context), so there is no deadlock risk.
-        Current = _persistence.ReadAsync<AppSettings>(_filePath).GetAwaiter().GetResult() ?? new AppSettings();
+        // Eager, blocking load (a few hundred bytes). This ctor IS resolved on the WPF dispatcher
+        // thread (App.OnStartup → GetRequiredService<IAppSettingsService>), so blocking on the raw
+        // ReadAsync task deadlocked whenever an await inside it captured the dispatcher's
+        // SynchronizationContext (OnStartup blocks the dispatcher — the continuation could never
+        // run; the app hung windowless right after "Hosting started"). Task.Run starts the chain on
+        // a thread-pool thread with no sync context, and JsonPersistenceService additionally uses
+        // ConfigureAwait(false) throughout — two independent layers against the deadlock.
+        Current = Task.Run(() => _persistence.ReadAsync<AppSettings>(_filePath)).GetAwaiter().GetResult() ?? new AppSettings();
         logger.LogDebug("Loaded app settings (theme '{Theme}', {CustomColors} custom colors)",
             Current.Theme, Current.CustomThemeColors.Count);
     }

@@ -9,7 +9,12 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <RootNamespace>OpenNotes</RootNamespace>
     <AssemblyName>OpenNotes</AssemblyName>
+    <ApplicationIcon>app_icon_opennotes.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="app_icon_opennotes.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- MVVM & DI -->
@@ -53,8 +58,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Mermaid JS bundled as embedded resource -->
-    <EmbeddedResource Include="Resources\mermaid.min.js" Condition="Exists('Resources\mermaid.min.js')" />
+    <!-- Offline web assets (Mermaid UMD + KaTeX js/css/fonts), served to WebView2 pages via
+         SetVirtualHostNameToFolderMapping — see Services\WebViewAssets.cs and Resources\web\VERSIONS.md.
+         A real on-disk folder (not embedded resources) because KaTeX's CSS loads fonts/*.woff2 by
+         relative URL. -->
+    <Content Include="Resources\web\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

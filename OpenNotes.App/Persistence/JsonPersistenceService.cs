@@ -38,8 +38,12 @@ public class JsonPersistenceService : IPersistenceService
             if (!File.Exists(filePath))
                 return null;
 
-            await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, true);
-            return await JsonSerializer.DeserializeAsync<T>(stream, _options, ct);
+            // ConfigureAwait(false) throughout this class: callers may block on these tasks from a
+            // thread with a SynchronizationContext (the app-settings eager load runs under the WPF
+            // dispatcher) — capturing the context here deadlocks such callers.
+            var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, true);
+            await using var _ = stream.ConfigureAwait(false);
+            return await JsonSerializer.DeserializeAsync<T>(stream, _options, ct).ConfigureAwait(false);
         }
         catch (JsonException ex)
         {
@@ -63,12 +67,13 @@ public class JsonPersistenceService : IPersistenceService
         // share one ".tmp". (Rapid custom-theme color saves used to race on a fixed name.)
         var tmpPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
         var gate = WriteLockFor(filePath);
-        await gate.WaitAsync(ct);
+        await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await using (var stream = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true))
+            var stream = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
+            await using (stream.ConfigureAwait(false))
             {
-                await JsonSerializer.SerializeAsync(stream, data, _options, ct);
+                await JsonSerializer.SerializeAsync(stream, data, _options, ct).ConfigureAwait(false);
             }
             // Atomic rename — crash-safe on NTFS
             File.Move(tmpPath, filePath, overwrite: true);

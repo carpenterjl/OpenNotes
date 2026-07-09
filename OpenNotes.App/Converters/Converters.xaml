@@ -20,7 +20,6 @@
     <conv:BlockPreviewConverter x:Key="BlockPreviewConverter" />
     <conv:SvgStringToImageSourceConverter x:Key="SvgStringToImageSourceConverter" />
     <conv:PathToImageSourceConverter x:Key="PathToImageSourceConverter" />
-    <conv:LatexNormalizeConverter x:Key="LatexNormalizeConverter" />
 
     <!-- Short aliases used by block views -->
     <conv:NullToVisibilityConverter x:Key="NullToVis" />

@@ -1,4 +1,5 @@
 using Markdig;
+using Markdig.Wpf; // UseSupportedExtensions (matches the on-screen MarkdownViewer pipeline)
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using QuestPDF.Fluent;
@@ -15,7 +16,12 @@ public static class MarkdownPdfComposer
     /// <summary>Heading size scale per level (level 4+ uses the last entry).</summary>
     private static readonly float[] HeadingScale = [1.6f, 1.4f, 1.2f, 1.05f];
 
-    private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().Build();
+    // Same extension set as the live MarkdownViewer and MarkdownImageRenderer, so this fallback
+    // parses the identical AST (tables, task lists, autolinks). Extension node types the walker
+    // below doesn't special-case degrade gracefully through the ContainerBlock-recurse and
+    // LeafBlock/LeafInline literal-text catch-alls.
+    private static readonly MarkdownPipeline Pipeline =
+        new MarkdownPipelineBuilder().UseSupportedExtensions().Build();
 
     /// <summary>Compose <paramref name="markdown"/> into <paramref name="container"/> as rich
     /// text. <paramref name="fontSizePt"/> is the body size (already page-scaled);
@@ -23,7 +29,7 @@ public static class MarkdownPdfComposer
     public static void Compose(IContainer container, string markdown, float fontSizePt,
                                string textHex, string mutedHex)
     {
-        var document = Markdown.Parse(markdown ?? string.Empty, Pipeline);
+        var document = Markdig.Markdown.Parse(markdown ?? string.Empty, Pipeline);
         container.Column(col => ComposeBlocks(col, document, fontSizePt, textHex, mutedHex));
     }
 

@@ -1,10 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using OpenNotes.Models.Blocks;
-using OpenNotes.Services;
-using WpfMath.Parsers;
 
 namespace OpenNotes.ViewModels.Blocks;
 
+/// <summary>ViewModel for the LaTeX block. Rendering and validation now live in the KaTeX/WebView2
+/// preview (<c>LatexBlockView</c>): the page's <c>window.renderLatex</c> reports success/failure
+/// through the postMessage channel, which sets/clears <see cref="ErrorMessage"/> here, and the
+/// last good render survives invalid intermediate input inside the page DOM (the old WpfMath
+/// parse + RenderedFormula last-good mechanism is gone).</summary>
 public partial class LatexBlockViewModel : BlockViewModelBase
 {
     [ObservableProperty] private string _formula;
@@ -12,49 +15,13 @@ public partial class LatexBlockViewModel : BlockViewModelBase
     [ObservableProperty] private bool _isPreviewMode = true;
     [ObservableProperty] private string? _errorMessage;
 
-    /// <summary>The last successfully-parsed formula. The preview control binds to this
-    /// (not the raw <see cref="Formula"/>) so invalid/mid-edit input never breaks the render.</summary>
-    [ObservableProperty] private string _renderedFormula;
-
     public LatexBlockViewModel(LatexBlock block) : base(block)
     {
         _formula = block.Formula;
         _displayMode = block.DisplayMode;
-        _renderedFormula = block.Formula;
-        Validate(block.Formula);
     }
 
-    partial void OnFormulaChanged(string value)
-    {
-        Validate(value);
-        RaiseContentChanged();
-    }
-
-    private void Validate(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            ErrorMessage = null;
-            RenderedFormula = string.Empty;
-            return;
-        }
-
-        try
-        {
-            // Normalize first: strips % comments and $ delimiters, maps unsupported commands
-            // (\mathbf, \dfrac, amsmath environments, …) onto WpfMath equivalents, and turns
-            // hard newlines into \\ so multi-line input renders as stacked lines.
-            var normalized = LatexPreprocessor.Normalize(value);
-            WpfTeXFormulaParser.Instance.Parse(normalized, null);
-            RenderedFormula = normalized;
-            ErrorMessage = null;
-        }
-        catch (Exception ex)
-        {
-            // Keep the last good render; surface the parse error to the user.
-            ErrorMessage = ex.Message;
-        }
-    }
+    partial void OnFormulaChanged(string value) => RaiseContentChanged();
 
     public override ContentBlock GetUpdatedBlock()
     {

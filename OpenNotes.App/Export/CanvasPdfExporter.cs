@@ -105,7 +105,7 @@ public class CanvasPdfExporter : ICanvasPdfExporter
                 {
                     svgs[node.Id] = CodeToSvgRenderer.Render(
                         node.AuthoredSource, node.AuthoredLanguage ?? "plaintext",
-                        showLineNumbers: true, CodeSvgPalette.FromPdfTheme(theme));
+                        node.AuthoredShowLineNumbers, CodeSvgPalette.FromPdfTheme(theme));
                 }
                 catch (Exception ex)
                 {
@@ -154,7 +154,18 @@ public class CanvasPdfExporter : ICanvasPdfExporter
                 return File.Exists(node.ImagePath) ? File.ReadAllBytes(node.ImagePath) : null;
 
             if (node.Shape == NodeShape.Latex && !string.IsNullOrWhiteSpace(node.LatexContent))
+            {
+                // 1) The node's cached KaTeX PNG — full LaTeX support (bold, \boxed, \mathbb),
+                //    4x supersampled, already colored with the effective canvas text color, and
+                //    pixel-identical to the on-screen node by construction.
+                if (!string.IsNullOrWhiteSpace(node.ImagePath) && File.Exists(node.ImagePath))
+                    return File.ReadAllBytes(node.ImagePath);
+
+                // 2) WpfMath raster (limited dialect) — kept as the offline/STA fallback so an
+                //    export never silently loses a formula when no PNG was ever rendered
+                //    (WebView2 unavailable, legacy document). 3) Callers fall back to raw text.
                 return _renderLatexPng(node.LatexContent, theme.TextHex);
+            }
         }
         catch (Exception ex)
         {
@@ -305,11 +316,30 @@ public class CanvasPdfExporter : ICanvasPdfExporter
             // Prefer the export-time re-rendered SVG (theme-fresh code colors); fall back to the
             // captured snapshot for legacy nodes without authored source.
             var svg = page.NodeSvgs.TryGetValue(node.Id, out var rerendered) ? rerendered : node.SvgContent!;
-            layers.Layer().Unconstrained()
-                .OffsetX(X(node.X)).OffsetY(Y(node.Y))
-                .Width((float)(node.Width * s)).Height((float)(node.Height * s))
-                .Padding((float)(2 * s))
-                .Svg(svg);
+
+            // Replicate the live template's <Image Stretch="Uniform" Margin="2">: uniform-scale
+            // the SVG into the (W-4)×(H-4) content box and CENTER it (letterboxing as WPF does).
+            // QuestPDF's .Svg() alone stretches to fill, which shifts every glyph relative to the
+            // node box — node-bound ink (anchored to node bounds) then lands on the wrong token.
+            // Computing the fit from the SVG actually placed also absorbs any intrinsic-size drift
+            // between the captured snapshot and the export-time re-render.
+            if (TryGetSvgSize(svg, out var svgW, out var svgH))
+            {
+                var (fitX, fitY, fitW, fitH) = UniformFitRect(node.X, node.Y, node.Width, node.Height, 2, svgW, svgH);
+                layers.Layer().Unconstrained()
+                    .OffsetX(X(fitX)).OffsetY(Y(fitY))
+                    .Width((float)(fitW * s)).Height((float)(fitH * s))
+                    .Svg(svg);
+            }
+            else
+            {
+                // Unknown intrinsic size — legacy stretch placement (better than dropping the node).
+                layers.Layer().Unconstrained()
+                    .OffsetX(X(node.X)).OffsetY(Y(node.Y))
+                    .Width((float)(node.Width * s)).Height((float)(node.Height * s))
+                    .Padding((float)(2 * s))
+                    .Svg(svg);
+            }
             return;
         }
 
@@ -377,6 +407,72 @@ public class CanvasPdfExporter : ICanvasPdfExporter
                 t.AlignCenter();
                 t.Span(label).FontSize(fontSizePt).FontColor(theme.TextHex);
             });
+    }
+
+    /// <summary>The rectangle (canvas coords) a WPF <c>&lt;Image Stretch="Uniform"&gt;</c> with a
+    /// uniform <paramref name="inset"/> margin gives content of intrinsic size
+    /// <paramref name="contentW"/>×<paramref name="contentH"/> inside a node box: uniformly scaled
+    /// (up or down — WPF Uniform upscales too) and centered on both axes.</summary>
+    public static (double X, double Y, double Width, double Height) UniformFitRect(
+        double nodeX, double nodeY, double nodeW, double nodeH, double inset, double contentW, double contentH)
+    {
+        double boxW = Math.Max(nodeW - 2 * inset, 1);
+        double boxH = Math.Max(nodeH - 2 * inset, 1);
+        if (contentW <= 0 || contentH <= 0) return (nodeX + inset, nodeY + inset, boxW, boxH);
+
+        double fit = Math.Min(boxW / contentW, boxH / contentH);
+        double drawW = contentW * fit, drawH = contentH * fit;
+        return (nodeX + inset + (boxW - drawW) / 2,
+                nodeY + inset + (boxH - drawH) / 2,
+                drawW, drawH);
+    }
+
+    /// <summary>Parse an SVG's intrinsic size from its root element: numeric <c>width</c>/<c>height</c>
+    /// attributes first (what <see cref="CodeToSvgRenderer"/> emits), <c>viewBox</c> as fallback.</summary>
+    public static bool TryGetSvgSize(string svg, out double width, out double height)
+    {
+        width = height = 0;
+        if (string.IsNullOrWhiteSpace(svg)) return false;
+        try
+        {
+            var doc = System.Xml.Linq.XDocument.Parse(svg);
+            var root = doc.Root;
+            if (root is null || root.Name.LocalName != "svg") return false;
+
+            static bool TryNum(string? raw, out double value)
+            {
+                value = 0;
+                if (string.IsNullOrWhiteSpace(raw)) return false;
+                var trimmed = raw.Trim();
+                if (trimmed.EndsWith("px", StringComparison.OrdinalIgnoreCase))
+                    trimmed = trimmed[..^2];
+                return double.TryParse(trimmed, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out value) && value > 0;
+            }
+
+            if (TryNum(root.Attribute("width")?.Value, out width) &&
+                TryNum(root.Attribute("height")?.Value, out height))
+                return true;
+
+            var viewBox = root.Attribute("viewBox")?.Value;
+            if (!string.IsNullOrWhiteSpace(viewBox))
+            {
+                var parts = viewBox.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 4 &&
+                    double.TryParse(parts[2], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out width) &&
+                    double.TryParse(parts[3], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out height) &&
+                    width > 0 && height > 0)
+                    return true;
+            }
+        }
+        catch
+        {
+            // fall through — malformed SVG reports no intrinsic size
+        }
+        width = height = 0;
+        return false;
     }
 
     /// <summary>Rough wrapped-text height (canvas px) for vertical centering — deliberately a

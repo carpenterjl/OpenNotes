@@ -48,7 +48,9 @@ public static class ServiceCollectionExtensions
 
         // Export
         services.AddSingleton<IExportService, ExportService>();
+        services.AddSingleton<IHtmlPngExporter, HtmlPngExporter>();   // shared off-screen WebView2 PNG pipeline
         services.AddSingleton<IMermaidSvgExporter, MermaidSvgExporter>();
+        services.AddSingleton<ILatexPngRenderer, KatexPngRenderer>(); // KaTeX canvas/PDF LaTeX PNGs
         services.AddSingleton<ICanvasPdfExporter, CanvasPdfExporter>();
 
         // Canvas per-document color overrides (runtime resources)

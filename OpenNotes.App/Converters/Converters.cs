@@ -255,19 +255,6 @@ public class SvgStringToImageSourceConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
-/// <summary>Runs raw user LaTeX through <see cref="Services.LatexPreprocessor"/> so canvas
-/// FormulaControls render the same normalized dialect as the task editor (comments stripped,
-/// multi-line stacked, unsupported commands aliased).</summary>
-[ValueConversion(typeof(string), typeof(string))]
-public class LatexNormalizeConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => Services.LatexPreprocessor.Normalize(value as string);
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
 /// <summary>Loads a local image file path into a frozen <see cref="ImageSource"/> for display in a
 /// plain <c>&lt;Image&gt;</c> (used by canvas image snapshot nodes). Returns null for missing paths.</summary>
 [ValueConversion(typeof(string), typeof(ImageSource))]

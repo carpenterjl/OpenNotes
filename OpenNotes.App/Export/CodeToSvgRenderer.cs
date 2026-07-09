@@ -40,6 +40,11 @@ public record CodeSvgPalette(string BackgroundHex, string TextHex, string MutedH
 public static class CodeToSvgRenderer
 {
     private const double FontSize = 13;
+    // 18 px pitch is deliberately kept even though AvalonEdit's natural Consolas-13 pitch is
+    // ~17.1: both static surfaces (canvas snapshot + PDF re-render) share THIS renderer, so
+    // canvas↔PDF stay pixel-identical; the task view is a live scrolling editor where the
+    // <1 px/line delta is imperceptible, and changing the pitch would resize every persisted
+    // code snapshot (re-breaking node-bound ink alignment).
     private const double LineHeight = 18;
     private const double PadX = 12;
     private const double PadY = 10;

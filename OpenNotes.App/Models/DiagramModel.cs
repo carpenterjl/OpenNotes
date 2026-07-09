@@ -64,6 +64,11 @@ public class DiagramNode
     public string? AuthoredSource { get; set; }
     /// <summary>Language for a code-backed node.</summary>
     public string? AuthoredLanguage { get; set; }
+    /// <summary>Whether a code-backed node's snapshot shows the line-number gutter. Captured from
+    /// the source block's setting; every re-render (theme change, PDF export, edit) must honor it —
+    /// a gutter appearing only in the PDF shifts the code relative to node-bound ink. Defaults to
+    /// true so legacy documents (which were always rendered with numbers) are unchanged.</summary>
+    public bool AuthoredShowLineNumbers { get; set; } = true;
     public List<Guid> ChildNodeIds { get; set; } = [];
     public Guid? ParentNodeId { get; set; }
     /// <summary>Node-bound ink strokes (WPF Ink Serialized Format bytes, base64 in JSON). Strokes drawn

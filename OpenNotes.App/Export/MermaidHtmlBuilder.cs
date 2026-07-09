@@ -3,8 +3,10 @@ using System.Text.RegularExpressions;
 namespace OpenNotes.Export;
 
 /// <summary>Builds the self-contained HTML page that renders a Mermaid definition via the
-/// mermaid ESM module. Shared by the live <c>MermaidBlockView</c> preview and the off-screen
-/// <c>MermaidSvgExporter</c> so both use identical escaping and initialization.</summary>
+/// BUNDLED mermaid UMD build (<see cref="Services.WebViewAssets.MermaidJsUrl"/> — fully offline,
+/// no CDN). Shared by the live <c>MermaidBlockView</c> preview and the off-screen
+/// <c>MermaidSvgExporter</c> so both use identical escaping and initialization. Hosts must call
+/// <c>WebViewAssets.ConfigureVirtualHost</c> after WebView2 init or the script tag 404s.</summary>
 public static class MermaidHtmlBuilder
 {
     /// <summary>Escape a raw Mermaid definition for safe embedding inside the HTML template's
@@ -85,27 +87,29 @@ public static class MermaidHtmlBuilder
             <body>
             <div class="mermaid">{{escapedDefinition}}</div>
             <script>
-              // A failed ESM import (offline, CDN unreachable, DNS…) kills the module script
-              // before its try/catch exists, leaving a silently blank page. Surface it: capture
-              // page-level errors, and if no SVG materialized after 8s report a load failure.
+              // A failed script load (missing bundled asset, virtual host not configured…) leaves
+              // a silently blank page. Surface it: capture page-level errors, and if no SVG
+              // materialized after 8s report a load failure.
               window.addEventListener('error', function (e) {
                 try { window.chrome.webview.postMessage('error:' + (e.message || 'script load failed')); } catch {}
               }, true);
               setTimeout(function () {
                 if (!document.querySelector('svg')) {
-                  try { window.chrome.webview.postMessage('error:mermaid did not render (script blocked or network unavailable)'); } catch {}
+                  try { window.chrome.webview.postMessage('error:mermaid did not render (script blocked or bundled asset missing)'); } catch {}
                 }
               }, 8000);
             </script>
-            <script type="module">
-              import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-              mermaid.initialize({{BuildInitOptions(themeVariables)}});
-              try {
-                await mermaid.run();{{fitScript}}
-                window.chrome.webview.postMessage('done');
-              } catch (e) {
-                window.chrome.webview.postMessage('error:' + e.message);
-              }
+            <script src="{{Services.WebViewAssets.MermaidJsUrl}}"></script>
+            <script>
+              (async () => {
+                try {
+                  mermaid.initialize({{BuildInitOptions(themeVariables)}});
+                  await mermaid.run();{{fitScript}}
+                  window.chrome.webview.postMessage('done');
+                } catch (e) {
+                  window.chrome.webview.postMessage('error:' + e.message);
+                }
+              })();
             </script>
             </body></html>
             """;
