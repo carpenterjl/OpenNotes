@@ -147,14 +147,6 @@ The app uses:
 - **AvalonDock** — dockable panel layout
 - **Serilog** — structured logging
 
-See [CLAUDE.md](CLAUDE.md) for the full developer guide, including:
-- Step-by-step instructions for adding content block types, views, and undo commands
-- DI registration conventions and service lifetimes
-- Theme system and the custom color override engine
-- Canvas document format (`.taskcanvas` spec)
-- Hard-won gotchas (DI cycles, WebView2 hosting, WPF resource scoping, atomic writes)
-- Testing conventions
-
 ---
 
 ## Roadmap
@@ -183,7 +175,7 @@ See [CLAUDE.md](CLAUDE.md) for the full developer guide, including:
 
 | Symptom | Cause and fix |
 |---|---|
-| Process runs but no window appears | Startup blocked before the window was created — almost always a DI cycle hanging in `_host.StartAsync()`. Check `%APPDATA%\OpenNotes\logs\` for the last log line before the hang. See the "Hard-Won Gotchas" section in CLAUDE.md. |
+| Process runs but no window appears | Startup blocked before the window was created — almost always a DI cycle hanging in `_host.StartAsync()`. Check `%APPDATA%\OpenNotes\logs\` for the last log line before the hang. |
 | Mermaid block shows "Syntax error in text" | Newer diagram types (e.g. `radar-beta`) need mermaid v11.3+. The app loads `mermaid@11` from CDN; verify WebView2 is installed and the machine had internet on first render. |
 | Mermaid block is blank | WebView2 runtime missing — install it (see Prerequisites). First render also needs internet to fetch the CDN bundle. |
 | Canvas node shows "Mermaid (render failed)" | The off-screen export render couldn't fetch mermaid.js. Double-click the node to retry once online. |

@@ -34,15 +34,6 @@ dotnet build OpenNotes.sln
 dotnet run --project OpenNotes.App
 ```
 
-Run the test suite:
-
-```powershell
-dotnet test OpenNotes.Tests
-```
-
-All 246 tests should pass with 0 build errors and 0 warnings before you start.
-
----
 
 ## Project structure
 
@@ -66,10 +57,9 @@ OpenNotes.sln
 │   ├── Export/             Markdown/HTML/ZIP/PDF exporters
 │   ├── Dialogs/            Modal dialogs (Settings, CustomTheme, ColorPicker, etc.)
 │   └── Infrastructure/     ServiceCollectionExtensions.cs (all DI registrations)
-└── OpenNotes.Tests/        xUnit test project mirroring the app structure
+└── OpenNotes.Tests/        xUnit test project mirroring the app structure (Intentionally not included in git repository)
 ```
 
-The full developer reference — DI conventions, theme system, canvas format, startup flow, and a "Hard-Won Gotchas" section — is in [CLAUDE.md](CLAUDE.md). Read it before making changes to startup, DI registration, or block views.
 
 ---
 
@@ -220,18 +210,6 @@ The `UndoRedoService` caps history at 200 entries (oldest dropped). Canvas comma
 
 ---
 
-## Testing
-
-Tests live in `OpenNotes.Tests/`, mirroring the app structure.
-
-```
-OpenNotes.Tests/
-├── Services/
-├── ViewModels/
-├── Persistence/
-└── ...
-```
-
 **Conventions:**
 - Test ViewModels and services in isolation — do not test WPF UI directly
 - Use `NullLogger<T>.Instance` for logger dependencies
@@ -249,7 +227,6 @@ The target before any PR is **0 new test failures**.
 1. Fork the repo and create a branch from `main`
 2. Make your changes — keep PRs focused on one thing
 3. Ensure `dotnet build OpenNotes.sln` produces 0 errors and 0 warnings
-4. Ensure `dotnet test OpenNotes.Tests` passes all tests
 5. Describe what you changed and why in the PR description — "what" is in the diff, "why" is what matters
 6. Reference any related issues
 
